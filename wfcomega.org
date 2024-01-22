@@ -1,0 +1,167 @@
+* Definitions
+For clarity let's define some terms:
+- *Grid*: The square graph used to represent the level
+- *Cell*: A single position in the grid
+- *Tile*: A value a cell can take
+- *Color*: Another term for tile.
+- *Adjacency*: Cells that are next to each other
+- *Pattern*: A tuple of tiles; typically captured by looking an input image
+* Setup
+Here we are setting up the chess Grid, a simple 4x4 grid
+#+begin_src python
+  chess_grid = array([
+      [1,0,1,0],
+      [0,1,0,1],
+      [1,0,1,0],
+      [0,1,0,1],
+  ])
+#+end_src
+
+er.... it seems like we don't use the chess grid? Weird. 
+
+Then we grab the unique tiles and define the vertical and horizontal patterns
+#+begin_src python
+unique_tiles = unique(chess_grid.ravel())
+v_adj = h_adj = [[0,1],[1,0]]
+v_adj, h_adj
+#+end_src
+
+
+We are making a 10x10 grid I guess.
+#+begin_src python
+N = 10
+#+end_src
+
+
+To do it the slow way with the double loop; we need to go through all the cells and give it a variable
+
+#+begin_src python
+from omega.symbolic.fol import Context
+
+T = len(unique_tiles)
+
+variables = {}
+locations = {}
+for i in range(N):
+  for j in range(N):
+    var = f"assign_{i}_{j}"
+    variables[var] = (0,T-1)
+    locations[var] = (i,j)
+
+context = Context()
+context.declare(**variables)
+context.bdd.configure(reordering=False);
+#+end_src
+
+
+Then we set up the formula. Looping again NxN times adding the horizontal and vertical patterns for each cell and its adjecencies. 
+
+#+begin_src python
+%%time
+generator = context.true
+
+dag_sizes = []
+dag_sizes.append(generator.dag_size)
+
+for i in range(N-1):
+  for j in range(N):
+    h_cases = context.false
+    for u,v in h_adj:
+      h_cases |= context.add_expr(f"assign_{i}_{j} = {u} & assign_{i+1}_{j} = {v}")
+    generator &= h_cases
+    dag_sizes.append(generator.dag_size)
+
+for i in range(N):
+  for j in range(N-1):
+    v_cases = context.false
+    for u,v in v_adj:
+      v_cases |= context.add_expr(f"assign_{i}_{j} = {u} & assign_{i}_{j+1} = {v}")
+    generator &= v_cases
+    dag_sizes.append(generator.dag_size)
+#+end_src
+
+That took a while, let's look at some of the results first: 
+#+begin_src python
+sol = context.pick(generator)
+img = zeros((N,N),dtype='uint8')
+for var, val in sol.items():
+  i,j = locations[var]
+  img[i,j] = val + 1
+
+imshow(img,vmin=0,vmax=2); colorbar();
+#+end_src
+
+If we plot the dag sizes as we build the final BDD we get a clearer picture of why it is taking so long:
+#+begin_src python
+plot(dag_sizes); axhline(dag_sizes[-1],c='r',linestyle='dashed');
+#+end_src
+
+The BDD blows up significantly until it is finally reduced once the redundancies are found.
+
+This is obviously needlessly slow. So let's not build it by the formula directly, let's leverage some of the redundancy in the structure directly and build the BDD that way.
+
+#+begin_src python
+  one_cell = context.true
+  h_cases = context.false
+  for u,v in h_adj:
+    h_cases |= context.add_expr(f"assign_0_0 = {u} & assign_1_0 = {v}")
+  v_cases = context.false
+  for u,v in h_adj:
+    v_cases |= context.add_expr(f"assign_0_0 = {u} & assign_0_1 = {v}")
+
+  h_cases_shifted = context.let({'assign_0_0': 'assign_0_1', 'assign_1_0': 'assign_1_1'}, h_cases)
+  v_cases_shifted = context.let({'assign_0_0': 'assign_1_0', 'assign_0_1': 'assign_1_1'}, v_cases)
+
+  one_cell &= h_cases
+  one_cell &= v_cases
+  one_cell &= h_cases_shifted
+  one_cell &= v_cases_shifted
+
+  generator2 = context.true
+  dag_sizes2 = []
+  dag_sizes2.append(generator2.dag_size)
+
+  for i in range(N-1):
+    for j in range(N-1):
+      if i == 0 and j == 0:
+        generator2 &= one_cell
+      else:
+  #the let is as follows; replace the thing before the : with the thing after in the operator that is the second argument, in this case one_cell. So we are saying rename assign_0_0 to assign_i_j in the formula one_cell and return the result. We then and this to the previously iterated on generator to get a generator with an extra cell
+        generator2 &= context.let({'assign_0_0': f'assign_{i}_{j}',
+                                  'assign_0_1': f'assign_{i}_{j+1}',
+                                  'assign_1_0': f'assign_{i+1}_{j}',
+                                  'assign_1_1': f'assign_{i+1}_{j+1}'
+                                  }, one_cell)
+
+      dag_sizes2.append(generator2.dag_size)
+
+
+  generator2.dag_size
+#+end_src
+
+
+Let's see if the two generators are the same:
+#+begin_src python
+assert generator == generator2
+#+end_src
+
+Well look at that, same BDD with one taking much much faster to compile.
+
+If we plot the same line graph:
+#+begin_src python
+plot(dag_sizes2); axhline(dag_sizes2[-1],c='r', linestyle='dashed');
+#+end_src
+
+We see we avoided that issue by only building to the specified size.
+
+And once again we have valid grids:
+#+begin_src python
+sol = context.pick(generator2)
+img = zeros((N,N),dtype='uint8')
+for var, val in sol.items():
+  i,j = locations[var]
+  img[i,j] = val + 1
+
+imshow(img,vmin=0,vmax=2); colorbar();
+#+end_src
+
