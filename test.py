@@ -7,7 +7,7 @@ file = open(f'{name}_pattern.json')
 
 data = json.load(file)
 
-N = 20
+N = 5
 
 h_adj = data["x_axis"]
 v_adj = data["y_axis"]
@@ -31,7 +31,7 @@ context.bdd.configure(reordering=False);
 
 one_cell = context.true
 h_cases = context.false
-start = time.time()
+start = time.monotonic_ns()
 for u,v in h_adj:
     h_cases |= context.add_expr(f"assign_0_0 = {u} & assign_1_0 = {v}")
     v_cases = context.false
@@ -64,13 +64,11 @@ for i in range(N-1):
             dag_sizes.append(generator.dag_size)
 
 
-end = time.time()
-print(end-start)
-print(generator.dag_size)
+end = time.monotonic_ns()
+print("time:", end-start)
+#print(generator.dag_size)
 
 gen_bdd = generator.bdd
 
-print(gen_bdd)
-print(type(gen_bdd))
 bdd_file = f'bdds/{name}_{N}x{N}_bdd.json'
 gen_bdd.dump(bdd_file, [generator])
