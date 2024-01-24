@@ -1,0 +1,2 @@
+* Omega WFC
+Using the omega library to compile binary decision diagrams for implementing the wavefunction collapse algorithm.
