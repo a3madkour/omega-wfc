@@ -151,7 +151,6 @@ for name in names:
 
         external_dict = {}
         root_props = gen_bdd.succ(generator)
-        # print(dir(generator))
         # print(generator._index)
 
         print("done compiling")
@@ -161,7 +160,10 @@ for name in names:
         assignment = bdd_wrapper.get_assignment(sample,tile_vec,N,tile_size)
         final_img = draw_simple_tiled(assignment,tile_vec,N,tile_size)
 
-        final_img.save("temp.png")
+        bdd_wrapper.dump_bdd("temp.json")
+
+        new_wrapper = SampleBDD(filename="temp.json")
+
 
 
         # print(dir(generator))

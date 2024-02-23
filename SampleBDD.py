@@ -1,57 +1,72 @@
 import sys
+import json
+import dd.cudd as cudd
 import random
+import os
 
 
 # state what the assumptions are for Sampling
 # Also might just be a wrapper class with more functionality over omega's BDD
 class SampleBDD:
-    def __init__(self, bdd_node):
+    def __init__(self, bdd_node=None, filename=None):
         "docstring"
-        self.bdd_node = bdd_node
-        self.bdd = bdd_node.bdd
+        self.weights = {}
         self.tree_true_probs = {}
+        self.bdd_node = None
+        self.bdd = None
+
+        if filename:
+            self.load_bdd(filename)
+
+        if bdd_node: 
+            self.bdd_node = bdd_node
+            self.bdd = bdd_node.bdd
+
+        if not self.bdd_node:
+            sys.exit("No filename or bdd_node passed to SampleBDD")
 
     def assign_weights(self, weight=0.5):
-        weights = {}
         for var in self.bdd.vars:
-            weights[var] = (1.0 - weight, weight)
-        return weights
+            self.weights[var] = (1.0 - weight, weight)
 
-    def compute_true_probs(self, bdd_node, weights):
+    def compute_true_probs(self, bdd_node, clear=False):
         # TODO: okay we need to figure out how to deal with overflow issues
+        if clear:
+            self.tree_true_probs.clear()
+
         if bdd_node == self.bdd.true:
-            self.tree_true_probs[bdd_node] = 1.0
+            self.tree_true_probs[bdd_node.__hash__()] = 1.0
             return 1.0
         elif bdd_node == self.bdd.false:
-            self.tree_true_probs[bdd_node] = 0.0
+            self.tree_true_probs[bdd_node.__hash__()] = 0.0
             return 0.0
 
-        (low, high) = weights[bdd_node.var]
-        if bdd_node.low not in self.tree_true_probs:
-            self.compute_true_probs(bdd_node.low, weights)
+        (low, high) = self.weights[bdd_node.var]
+        if bdd_node.low.__hash__() not in self.tree_true_probs:
+            self.compute_true_probs(bdd_node.low)
 
-        low_tree_prob = self.tree_true_probs[bdd_node.low]
+        low_tree_prob = self.tree_true_probs[bdd_node.low.__hash__()]
 
-        if bdd_node.high not in self.tree_true_probs:
-            self.compute_true_probs(bdd_node.high, weights)
+        if bdd_node.high.__hash__() not in self.tree_true_probs:
+            self.compute_true_probs(bdd_node.high)
 
-        high_tree_prob = self.tree_true_probs[bdd_node.high]
+        high_tree_prob = self.tree_true_probs[bdd_node.high.__hash__()]
 
         prob_tree = (low_tree_prob * low) + (high_tree_prob * high)
 
-        self.tree_true_probs[bdd_node] = prob_tree
+        self.tree_true_probs[bdd_node.__hash__()] = prob_tree
 
         return prob_tree
 
-    def sample_bdd(self, bdd_node,polarity, weights, final_sample):
+    def sample_bdd(self, bdd_node, polarity, final_sample):
         if bdd_node == self.bdd.true:
             return 1.0
         elif bdd_node == self.bdd.false:
             return 0.0
         n = random.random()
-        (low, high) = weights[bdd_node.var]
-        prob_high = self.tree_true_probs[bdd_node.high] * high
-        prob_low = self.tree_true_probs[bdd_node.low] * low
+        (low, high) = self.weights[bdd_node.var]
+        prob_high = self.tree_true_probs[bdd_node.high.__hash__()] * high
+        prob_low = self.tree_true_probs[bdd_node.low.__hash__()] * low
         polarity = polarity
         if bdd_node.negated:
             polarity = not polarity
@@ -67,9 +82,7 @@ class SampleBDD:
             bdd_node.high == self.bdd.false and not polarity
         ):
             final_sample[bdd_node._index] = False
-            self.sample_bdd(
-                bdd_node.low, polarity, weights, final_sample
-            )
+            self.sample_bdd(bdd_node.low, polarity,final_sample)
             return 1.0
         elif (
             (bdd_node.low == self.bdd.true and not polarity)
@@ -77,15 +90,11 @@ class SampleBDD:
             or (n < prop)
         ):
             final_sample[bdd_node._index] = True
-            self.sample_bdd(
-                bdd_node.high, polarity, weights, final_sample
-            )
+            self.sample_bdd(bdd_node.high, polarity, final_sample)
             return 1.0
         else:
             final_sample[bdd_node._index] = False
-            self.sample_bdd(
-                bdd_node.low,  polarity, weights, final_sample
-            )
+            self.sample_bdd(bdd_node.low, polarity, final_sample)
             return 1.0
 
     def convert_binary_to_num(self, bits):
@@ -97,15 +106,18 @@ class SampleBDD:
 
     def sample(self, weights=None):
         if not weights:
-            weights = self.assign_weights()
-        if len(weights) != len(self.bdd_node.bdd.vars):
+            self.assign_weights()
+        else:
+            self.weights = weights.copy()
+
+        if len(self.weights) != len(self.bdd_node.bdd.vars):
             sys.exit(
                 f"Weights passed to sample_bdd have {len(weights)} when there are {len(self.bdd.vars)} nodes in bdd_node"
             )
 
-        self.compute_true_probs(self.bdd_node, weights)
+        self.compute_true_probs(self.bdd_node)
         final_sample = {}
-        self.sample_bdd(self.bdd_node, True, weights, final_sample)
+        self.sample_bdd(self.bdd_node, True,final_sample)
         return final_sample
 
     def sample_as_bit_string(self, sample):
@@ -141,9 +153,23 @@ class SampleBDD:
     # def draw_sample(self,sample):
     #     num_bits = (self.bdd._number_of_cudd_vars() / N) / N
     # final_assignment = []
+    def dump_bdd(
+        self,
+        filename,
+    ):
+        #do the dump thing and dumb thing and output it as json and then read it bak
+        #Not the best but time is a factor
 
-    def dump_bdd(self, filename, weights=None, true_tree_probs=None, dump_weights=False, dump_tree_probs=False):
-        pass
+        self.bdd.dump(filename, [self.bdd_node])
+        out_file = open("wrapper-info-"+filename, 'w')
+        wrapper_info = {"weights": self.weights}
+        json.dump(wrapper_info, out_file, indent=6)
 
     def load_bdd(self, filename):
-        pass
+        bdd = cudd.BDD()
+        roots = bdd.load(filename)
+        wrapper_file = open(f"wrapper-info-{filename}", "r")
+        json_data = json.load(wrapper_file)
+        self.bdd = bdd
+        self.bdd_node = roots[0]
+        self.weights = json_data["weights"]

@@ -10,7 +10,7 @@ SCHEDULED: <2024-02-21 Wed>
 
 * TODO Actual TODO
 ** DONE fix float division by zero error
-** TODO set up saveing and loading bdd to the wrapper
+** DONE set up saveing and loading bdd to the wrapper
 ** TODO clean up files
 ** TODO make a git push
 ** TODO Set up learning
