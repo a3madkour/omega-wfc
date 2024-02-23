@@ -1,8 +1,17 @@
 import sys
 import json
 import dd.cudd as cudd
+import uuid
 import random
 import os
+from utils import get_subdirectory, get_all_elements_in_dir
+import pickle
+from enum import Enum
+
+
+class SampleFormat(Enum):
+    Value = 1
+    Bit = 2
 
 
 # state what the assumptions are for Sampling
@@ -18,7 +27,7 @@ class SampleBDD:
         if filename:
             self.load_bdd(filename)
 
-        if bdd_node: 
+        if bdd_node:
             self.bdd_node = bdd_node
             self.bdd = bdd_node.bdd
 
@@ -82,7 +91,7 @@ class SampleBDD:
             bdd_node.high == self.bdd.false and not polarity
         ):
             final_sample[bdd_node._index] = False
-            self.sample_bdd(bdd_node.low, polarity,final_sample)
+            self.sample_bdd(bdd_node.low, polarity, final_sample)
             return 1.0
         elif (
             (bdd_node.low == self.bdd.true and not polarity)
@@ -117,7 +126,7 @@ class SampleBDD:
 
         self.compute_true_probs(self.bdd_node)
         final_sample = {}
-        self.sample_bdd(self.bdd_node, True,final_sample)
+        self.sample_bdd(self.bdd_node, True, final_sample)
         return final_sample
 
     def sample_as_bit_string(self, sample):
@@ -128,10 +137,16 @@ class SampleBDD:
 
         return sample_bit_string
 
-    def get_assignment(self, sample, tile_vec, dim, tile_size):
+    def get_assignment(
+        self, sample, tile_vec, dim, tile_size, sample_format=SampleFormat.Value
+    ):
         num_bits = (self.bdd._number_of_cudd_vars() / dim) / dim
         final_assignment = []
         sample_bit_string = self.sample_as_bit_string(sample)
+
+        if sample_format == SampleFormat.Bit:
+            return sample_bit_string
+
         for i in range(0, dim):
             final_assignment.append([])
             for j in range(0, dim):
@@ -157,11 +172,11 @@ class SampleBDD:
         self,
         filename,
     ):
-        #do the dump thing and dumb thing and output it as json and then read it bak
-        #Not the best but time is a factor
+        # do the dump thing and dumb thing and output it as json and then read it bak
+        # Not the best but time is a factor
 
         self.bdd.dump(filename, [self.bdd_node])
-        out_file = open("wrapper-info-"+filename, 'w')
+        out_file = open("wrapper-info-" + filename, "w")
         wrapper_info = {"weights": self.weights}
         json.dump(wrapper_info, out_file, indent=6)
 
@@ -173,3 +188,78 @@ class SampleBDD:
         self.bdd = bdd
         self.bdd_node = roots[0]
         self.weights = json_data["weights"]
+
+    def hash_assignment(self, assignment):
+        pass
+
+    def gen_uniform_training_set(
+        self,
+        dirname,
+        tile_vec,
+        N,
+        tile_size,
+        num_samples=10,
+        sample_format=SampleFormat.Bit,
+    ):
+        dir_path = get_subdirectory(dirname)
+        assignments = []
+        for i in range(num_samples):
+            sample = self.sample()
+            assignment = self.get_assignment(
+                sample, tile_vec, N, tile_size, sample_format
+            )
+            assignments.append(assignment)
+
+        # pickling for now
+        # format size-num_samples-runID
+        pickle_file = open(f"{dir_path}/{N}-{num_samples}-{uuid.uuid4()}.pkl", "wb")
+        pickle.dump(assignments, pickle_file)
+        pickle_file.close()
+
+    def load_assignments_set(self, assign_pickle_file):
+        pickle_file = open(assign_pickle_file, "rb")
+        assignments = pickle.load(pickle_file)
+        pickle_file.close()
+        return assignments
+
+    def train_with_n_runs(self, path):
+        runs = get_all_elements_in_dir(get_subdirectory(path), lambda x : "pkl" in x)
+        counts = {}
+        big_count = 0
+        for run in runs:
+            assignments = self.load_assignments_set(f"{path}/{run}")
+            run_counts = self.train_with_one_run(assignments, False)
+            small_count = len(assignments)
+            big_count += small_count
+
+            if len(counts) < 1:
+                counts = run_counts
+            else:
+                for el in counts:
+                    counts[el] += run_counts[el]
+
+        for bit in counts:
+            high = counts[bit] / big_count
+            low = 1.0 - high
+            self.weights[self.bdd.var_at_level(bit)] = (low, high)
+
+        return counts
+        
+
+    def train_with_one_run(self, assignments, update_weights=True):
+        counts = {}
+        for i in range(len(self.weights)):
+            counts[i] = 0
+
+        for assignment in assignments:
+            for i, bit in enumerate(assignment):
+                if bit == 1:
+                    counts[i] = counts[i] + 1
+
+        if update_weights:
+            for bit in counts:
+                high = counts[bit] / len(assignments)
+                low = 1.0 - high
+                self.weights[self.bdd.var_at_level(bit)] = (low, high)
+
+        return counts

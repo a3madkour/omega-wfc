@@ -3,25 +3,20 @@ import json
 import time
 import random
 import uuid
-from os import mkdir, path, getcwd
+import os
 # from draw import draw_sample
     
 
 from SampleBDD import SampleBDD
 from SimpleTiled import draw_simple_tiled
+from utils import get_subdirectory, get_all_elements_in_dir
        
-
-def get_subdirectory(sd):
-    dir = path.join(getcwd(), sd)
-    if not path.isdir(dir):
-        mkdir(dir)
-    return dir
 
 
 # names =  ["Castle", "Circles","Circuit", "FloorPlan", "Knots", "Rooms", "Summer"]
 names = ["Knots"]
 # sizes = [2,5]
-sizes = [2]
+sizes = [5]
 for name in names:
     for N in sizes:
         # print("We are at: (name:", name, ",N:",N,")")
@@ -157,14 +152,29 @@ for name in names:
 
         bdd_wrapper = SampleBDD(generator)
         sample = bdd_wrapper.sample()
+        bdd_wrapper.dump_bdd("temp.json")
+
+
+        bdd_wrapper.gen_uniform_training_set("train", tile_vec,N,tile_size, 10)
+
+
+
+        bdd_wrapper.train_with_n_runs("train")
+
+
         assignment = bdd_wrapper.get_assignment(sample,tile_vec,N,tile_size)
         final_img = draw_simple_tiled(assignment,tile_vec,N,tile_size)
 
-        bdd_wrapper.dump_bdd("temp.json")
+                # for run in runs:
+        #     assignments = bdd_wrapper.load_assignments_set(f"train/{run}")
+            # bdd_wrapper.train_with_one_run(assignments)
+        # for el in sub_dirs:
+        #     print(el)
+        # assignments = 
+        final_img.save("temp.png")
 
-        new_wrapper = SampleBDD(filename="temp.json")
 
-
+        
 
         # print(dir(generator))
         # print(dir(gen_bdd))

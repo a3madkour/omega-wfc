@@ -12,14 +12,14 @@ def processed_tile(image_path, transformation):
     elif transformation == 4:
         newim = im.mirror()
     elif transformation == 5:
+        newim = newim.mirror()
         newim = im.rotate(90)
-        newim = newim.mirror()
     elif transformation == 5:
+        newim = newim.mirror()
         newim = im.rotate(180)
-        newim = newim.mirror()
     elif transformation == 7:
-        newim = im.rotate(270)
         newim = newim.mirror()
+        newim = im.rotate(270)
     elif transformation > 7:
         print("transformation is invalid; not doing any transformation is the default")
 
