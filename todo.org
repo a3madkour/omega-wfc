@@ -1,0 +1,18 @@
+* TODO Implement 3x3 pattern extraction
+SCHEDULED: <2024-02-19 Mon>
+* TODO Implement sampling
+SCHEDULED: <2024-02-19 Mon>
+* TODO Implement the constraints on top of WFC
+SCHEDULED: <2024-02-20 Tue>
+* TODO Implement mario level as circuit
+SCHEDULED: <2024-02-21 Wed>
+
+
+* TODO Actual TODO
+** DONE fix float division by zero error
+** TODO set up saveing and loading bdd to the wrapper
+** TODO clean up files
+** TODO make a git push
+** TODO Set up learning
+** TODO Store results of experiments
+** TODO Set up metrics class
