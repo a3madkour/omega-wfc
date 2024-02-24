@@ -16,9 +16,10 @@ SCHEDULED: <2024-02-21 Wed>
 ** DONE Set up learning
 ** TODO figure out why the right most coner is sometimes wrong
 ** TODO Hash the assingnments
-Hashing the assignments can also be seen as assigning a sample to a bucket. The assumption is everything in the bucket is close enough to conisdered repetition.
+Hashing the assignments can also be seen as assigning a sample to a bucket. The assumption is everything in the bucket is close enough to considered repetition.
 ** TODO Emphasize that checking too (if needed) is an efficient operation 
 ** TODO Have a check procedure to see if the answer is valid
 ** TODO Store results of experiments
 *** TODO Observe how often each hash shows up in the sampling before and after training
 ** TODO Set up metrics class
+** TODO look into what the cube is, because randomizing that might also help

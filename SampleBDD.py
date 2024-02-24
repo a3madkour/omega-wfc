@@ -1,6 +1,8 @@
 import sys
 import json
+import time
 import dd.cudd as cudd
+import hashlib
 import uuid
 import random
 import os
@@ -31,8 +33,8 @@ class SampleBDD:
             self.bdd_node = bdd_node
             self.bdd = bdd_node.bdd
 
-        if not self.bdd_node:
-            sys.exit("No filename or bdd_node passed to SampleBDD")
+        # if not self.bdd_node:
+        #     sys.exit("No filename or bdd_node passed to SampleBDD")
 
     def assign_weights(self, weight=0.5):
         for var in self.bdd.vars:
@@ -113,7 +115,7 @@ class SampleBDD:
             return_value = (return_value << 1) + bit
         return return_value
 
-    def sample(self, weights=None):
+    def sample(self, weights=None, clear_true_probs=False):
         if not weights:
             self.assign_weights()
         else:
@@ -124,28 +126,37 @@ class SampleBDD:
                 f"Weights passed to sample_bdd have {len(weights)} when there are {len(self.bdd.vars)} nodes in bdd_node"
             )
 
-        self.compute_true_probs(self.bdd_node)
+        start = time.monotonic_ns()
+        self.compute_true_probs(self.bdd_node,clear_true_probs)
+        end = time.monotonic_ns()
+        compute_true_probs_time = end - start
+
+        start = time.monotonic_ns()
         final_sample = {}
         self.sample_bdd(self.bdd_node, True, final_sample)
-        return final_sample
+        end = time.monotonic_ns()
+        sample_time = end - start
+        return (compute_true_probs_time, sample_time, final_sample)
 
-    def sample_as_bit_string(self, sample):
-        sample_bit_string = [0] * len(self.bdd.support(self.bdd_node))
+    def sample_as_bit_vec(self, sample):
+        sample_bit_vec = [0] * len(self.bdd.support(self.bdd_node))
         for assign in sample:
             # print(assign)
-            sample_bit_string[assign] = int(sample[assign])
+            sample_bit_vec[assign] = int(sample[assign])
 
-        return sample_bit_string
+        return sample_bit_vec
+
+    # def sample_as_bit_string(self, sample):
 
     def get_assignment(
         self, sample, tile_vec, dim, tile_size, sample_format=SampleFormat.Value
     ):
         num_bits = (self.bdd._number_of_cudd_vars() / dim) / dim
         final_assignment = []
-        sample_bit_string = self.sample_as_bit_string(sample)
+        sample_bit_vec = self.sample_as_bit_vec(sample)
 
         if sample_format == SampleFormat.Bit:
-            return sample_bit_string
+            return sample_bit_vec
 
         for i in range(0, dim):
             final_assignment.append([])
@@ -154,13 +165,11 @@ class SampleBDD:
                 end_index = int(current_index + num_bits)
                 # print(
                 #     self.convert_binary_to_num(
-                #     sample_bit_string[current_index:end_index]
+                #     sample_bit_vec[current_index:end_index]
                 # )
                 # )
                 final_assignment[i].append(
-                    self.convert_binary_to_num(
-                        sample_bit_string[current_index:end_index]
-                    )
+                    self.convert_binary_to_num(sample_bit_vec[current_index:end_index])
                 )
 
         return final_assignment
@@ -189,7 +198,7 @@ class SampleBDD:
         self.bdd_node = roots[0]
         self.weights = json_data["weights"]
 
-    def hash_assignment(self, assignment):
+    def bin_assignment(self, delta, distance):
         pass
 
     def gen_uniform_training_set(
@@ -223,7 +232,7 @@ class SampleBDD:
         return assignments
 
     def train_with_n_runs(self, path):
-        runs = get_all_elements_in_dir(get_subdirectory(path), lambda x : "pkl" in x)
+        runs = get_all_elements_in_dir(get_subdirectory(path), lambda x: "pkl" in x)
         counts = {}
         big_count = 0
         for run in runs:
@@ -244,7 +253,6 @@ class SampleBDD:
             self.weights[self.bdd.var_at_level(bit)] = (low, high)
 
         return counts
-        
 
     def train_with_one_run(self, assignments, update_weights=True):
         counts = {}
@@ -252,7 +260,9 @@ class SampleBDD:
             counts[i] = 0
 
         for assignment in assignments:
+            # print(assignment)
             for i, bit in enumerate(assignment):
+                # print(i)
                 if bit == 1:
                     counts[i] = counts[i] + 1
 
@@ -263,3 +273,9 @@ class SampleBDD:
                 self.weights[self.bdd.var_at_level(bit)] = (low, high)
 
         return counts
+
+    def sat(self, sample):
+        bdd_assignment = {self.bdd.var_at_level(k): v for k, v in sample.items()}
+        cond_bdd = self.bdd.let(bdd_assignment, self.bdd_node)
+
+        return self.bdd.true == cond_bdd
