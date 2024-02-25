@@ -7,6 +7,7 @@ SCHEDULED: <2024-02-20 Tue>
 * TODO Implement mario level as circuit
 SCHEDULED: <2024-02-21 Wed>
 
+* TODO Emphasize that checking too (if needed) is an efficient operation 
 
 * TODO Actual TODO
 ** DONE fix float division by zero error
@@ -15,11 +16,14 @@ SCHEDULED: <2024-02-21 Wed>
 ** DONE make a git push
 ** DONE Set up learning
 ** TODO figure out why the right most coner is sometimes wrong
-** TODO Hash the assingnments
+** TODO Implement hamming distance
+** DONE Hash the assingnments
 Hashing the assignments can also be seen as assigning a sample to a bucket. The assumption is everything in the bucket is close enough to considered repetition.
-** TODO Emphasize that checking too (if needed) is an efficient operation 
-** TODO Have a check procedure to see if the answer is valid
+** DONE Have a check procedure to see if the answer is valid
+** DONE Set up metrics class
 ** TODO Store results of experiments
 *** TODO Observe how often each hash shows up in the sampling before and after training
-** TODO Set up metrics class
+** TODO hierachircal clustring
 ** TODO look into what the cube is, because randomizing that might also help
+** TODO demonstrate circuit viability in godot
+** TODO Relate the knowledge compilation stuff to understanding the minimum sized program capable of expressing the design domain in question (reference Micheal Cook's student's paper)

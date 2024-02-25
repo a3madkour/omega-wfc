@@ -4,8 +4,9 @@ import time
 from enum import Enum
 import sys
 import json
-from SampleBDD import SampleBDD
+from SampleBDD import SampleBDD, SampleFormat
 
+#tile_counts
 
 
 class TileSet(Enum):
@@ -13,10 +14,10 @@ class TileSet(Enum):
 
 
 class SimpleTiled(SampleBDD):
-    def __init__(self, tileset=TileSet.Knots, size = 2, path = "tileset-json"):
+    def __init__(self, tileset=TileSet.Knots, dim = 2, path = "tileset-json"):
         super().__init__()
         self.tileset = tileset
-        self.size = size
+        self.dim = dim
         self.path = path
         self.name = tileset.name
         self.is_compiled = False
@@ -40,8 +41,8 @@ class SimpleTiled(SampleBDD):
 
         variables = {}
         locations = {}
-        for i in range(self.size):
-            for j in range(self.size):
+        for i in range(self.dim):
+            for j in range(self.dim):
                 var = f"assign_{i}_{j}"
                 variables[var] = (0, T - 1)
                 locations[var] = (i, j)
@@ -80,8 +81,8 @@ class SimpleTiled(SampleBDD):
         dag_sizes = []
         dag_sizes.append(generator.dag_size)
 
-        for i in range(self.size - 1):
-            for j in range(self.size - 1):
+        for i in range(self.dim - 1):
+            for j in range(self.dim - 1):
                 if i == 0 and j == 0:
                     generator &= one_cell
                 else:
@@ -108,6 +109,36 @@ class SimpleTiled(SampleBDD):
  
 
 
+
+    def get_assignment(
+        self, sample, sample_format=SampleFormat.Value
+    ):
+
+        num_bits = (self.bdd._number_of_cudd_vars() / self.dim) / self.dim
+        final_assignment = []
+        sample_bit_vec = self.sample_as_bit_vec(sample)
+
+        if sample_format == SampleFormat.Bit:
+            return sample_bit_vec
+
+        for i in range(0, self.dim):
+            final_assignment.append([])
+            for j in range(0, self.dim):
+                current_index = int(i * self.dim * num_bits + j * num_bits)
+                end_index = int(current_index + num_bits)
+                # print(
+                #     self.convert_binary_to_num(
+                #     sample_bit_vec[current_index:end_index]
+                # )
+                # )
+                final_assignment[i].append(
+                    self.convert_binary_to_num(sample_bit_vec[current_index:end_index])
+                )
+
+        return final_assignment
+
+
+    
     def draw_simple_tiled(self,sample_assignment):
         # this assumes an order which it should not
         final_image_height = self.size * self.tile_size[0]
@@ -158,7 +189,6 @@ class SimpleTiled(SampleBDD):
             print("transformation is invalid; not doing any transformation is the default")
 
         return newim
-
 
 
 

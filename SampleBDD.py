@@ -40,11 +40,7 @@ class SampleBDD:
         for var in self.bdd.vars:
             self.weights[var] = (1.0 - weight, weight)
 
-    def compute_true_probs(self, bdd_node, clear=False):
-        # TODO: okay we need to figure out how to deal with overflow issues
-        if clear:
-            self.tree_true_probs.clear()
-
+    def compute_true_probs(self, bdd_node):
         if bdd_node == self.bdd.true:
             self.tree_true_probs[bdd_node.__hash__()] = 1.0
             return 1.0
@@ -74,18 +70,27 @@ class SampleBDD:
             return 1.0
         elif bdd_node == self.bdd.false:
             return 0.0
-        n = random.random()
-        (low, high) = self.weights[bdd_node.var]
-        prob_high = self.tree_true_probs[bdd_node.high.__hash__()] * high
-        prob_low = self.tree_true_probs[bdd_node.low.__hash__()] * low
-        polarity = polarity
+
         if bdd_node.negated:
             polarity = not polarity
 
+        n = random.random()
+        (low, high) = self.weights[bdd_node.var]
+
+        prob_high = self.tree_true_probs[bdd_node.high.__hash__()] 
+        prob_low = self.tree_true_probs[bdd_node.low.__hash__()] 
+
+
+        #we need to multiply by low and high at some point
+
         if not polarity:
             rev_prob_high = 1.0 - prob_high
-            rev_prob_low = min(1.0 - prob_low, 0.9)
-            prop = (rev_prob_high) / (rev_prob_high + rev_prob_low)
+            rev_prob_low = 1.0 - prob_low
+            if rev_prob_high != 0:
+                #check if high is 0
+                prop = (rev_prob_high) / (rev_prob_high + rev_prob_low)
+            else:
+                prop = 0
         else:
             prop = prob_high / (1 - 0.0 - prob_high + 1.0 - prob_low)
 
@@ -127,53 +132,34 @@ class SampleBDD:
             )
 
         start = time.monotonic_ns()
-        self.compute_true_probs(self.bdd_node,clear_true_probs)
+        if clear_true_probs == True:
+            self.tree_true_probs.clear()
+            
+        print("Compute Probs")
+        self.compute_true_probs(self.bdd_node)
         end = time.monotonic_ns()
         compute_true_probs_time = end - start
+        print(f"Done: compute_probs {compute_true_probs_time / 1e09}s")
 
+        print("Sampling")
         start = time.monotonic_ns()
         final_sample = {}
         self.sample_bdd(self.bdd_node, True, final_sample)
         end = time.monotonic_ns()
         sample_time = end - start
+        print(f"Done: Sampling {sample_time / 1e09}s")
         return (compute_true_probs_time, sample_time, final_sample)
 
-    def sample_as_bit_vec(self, sample):
-        sample_bit_vec = [0] * len(self.bdd.support(self.bdd_node))
-        for assign in sample:
-            # print(assign)
-            sample_bit_vec[assign] = int(sample[assign])
+    def sample_as_bit_map(self, sample):
+        sample_bit_map = {}
+        for sample_id in sample:
+            sample_bit_map[sample_id] = int(sample[sample_id])
 
-        return sample_bit_vec
+        return sample_bit_map
 
-    # def sample_as_bit_string(self, sample):
-
-    def get_assignment(
-        self, sample, tile_vec, dim, tile_size, sample_format=SampleFormat.Value
-    ):
-        num_bits = (self.bdd._number_of_cudd_vars() / dim) / dim
-        final_assignment = []
-        sample_bit_vec = self.sample_as_bit_vec(sample)
-
-        if sample_format == SampleFormat.Bit:
-            return sample_bit_vec
-
-        for i in range(0, dim):
-            final_assignment.append([])
-            for j in range(0, dim):
-                current_index = int(i * dim * num_bits + j * num_bits)
-                end_index = int(current_index + num_bits)
-                # print(
-                #     self.convert_binary_to_num(
-                #     sample_bit_vec[current_index:end_index]
-                # )
-                # )
-                final_assignment[i].append(
-                    self.convert_binary_to_num(sample_bit_vec[current_index:end_index])
-                )
-
-        return final_assignment
-
+    def sample_as_bit_string(self, sample):
+        #TODO
+        return "".join([str(int(sample[bit])) for bit in self.sample_as_bit_map(sample)])
     # def draw_sample(self,sample):
     #     num_bits = (self.bdd._number_of_cudd_vars() / N) / N
     # final_assignment = []
@@ -201,6 +187,7 @@ class SampleBDD:
     def bin_assignment(self, delta, distance):
         pass
 
+    #ASSUMEs get_assignement is implemented, if I could be bothered I will add it to an interface
     def gen_uniform_training_set(
         self,
         dirname,
@@ -213,9 +200,9 @@ class SampleBDD:
         dir_path = get_subdirectory(dirname)
         assignments = []
         for i in range(num_samples):
-            sample = self.sample()
+            (_,_,sample) = self.sample()
             assignment = self.get_assignment(
-                sample, tile_vec, N, tile_size, sample_format
+                sample
             )
             assignments.append(assignment)
 
@@ -274,8 +261,13 @@ class SampleBDD:
 
         return counts
 
-    def sat(self, sample):
-        bdd_assignment = {self.bdd.var_at_level(k): v for k, v in sample.items()}
-        cond_bdd = self.bdd.let(bdd_assignment, self.bdd_node)
+    def sat_omega_model(self, model):
+        cond_bdd = self.bdd.let(model, self.bdd_node)
 
         return self.bdd.true == cond_bdd
+
+    def sat_sample(self, sample):
+        bdd_assignment = {self.bdd.var_at_level(k): v for k, v in sample.items()}
+
+        return self.sat_omega_model(bdd_assignment)
+
