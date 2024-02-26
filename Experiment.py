@@ -1,19 +1,19 @@
 from enum import Enum
 import uuid
 from SimpleTiled import SimpleTiled
+from utils import get_subdirectory
 
 
-#figure out how to compute kl-divergence and jenson on samples
-#var counts as metrics
-#bit string
-#haming distance from a given bit string
+# figure out how to compute kl-divergence and jenson on samples
+# var counts as metrics
+# bit string
+# haming distance from a given bit string
 
 
 class Metric:
     def __init__(self, metric_func, metric_name):
         self.metric_name = metric_name
         self.metric_func = metric_func
-
 
     def __repr__(self):
         return self.metric_name
@@ -24,14 +24,17 @@ class Metric:
     def __call__(self, *args):
         return self.metric_func(*args)
 
-    def hamming_distance(bit_string_1,bit_string_2):
-        #TODO: add proper distance
+    def hamming_distance(bit_string_1, bit_string_2):
+        # TODO: add proper distance
         return "this is wrong"
+
     def hamming_distance_metric(generator, bit_string):
-        return Metric(lambda x: Metric.hamming_distance(x,bit_string),f"Hamming-{bit_string}")
+        return Metric(
+            lambda x: Metric.hamming_distance(x, bit_string), f"Hamming-{bit_string}"
+        )
 
     def bit_string_metric(generator):
-        return Metric(lambda x: generator.sample_as_bit_string(x),"BitString")
+        return Metric(lambda x: generator.sample_as_bit_string(x), "BitString")
 
 
 class Trial:
@@ -54,12 +57,9 @@ class Trial:
         self.trial_id = uuid.uuid4()
         self.time_data = {}
 
-
-
-    def add_metric(self,metric):
+    def add_metric(self, metric):
         self.metrics.append(metric)
-        print(self.metrics)
-        
+
     def run(self):
         if self.recompile_per_trial or not self.generator.is_compiled:
             compile_time = self.generator.compile()
@@ -81,9 +81,7 @@ class Trial:
                 sample_time,
                 final_sample,
             ) = self.generator.sample(clear_true_probs=self.clear_true_probs)
-            self.time_data["compute_true_probs_time"].append(
-                compute_true_probs_time
-            )
+            self.time_data["compute_true_probs_time"].append(compute_true_probs_time)
             self.time_data["sample_time"].append(sample_time)
             for metric in self.metrics:
                 if metric not in self.metrics_data:
@@ -97,7 +95,7 @@ class Trial:
 
         return out_str
 
-    def to_csv(self,path):
+    def to_csv(self, path):
         # self.num_samples = num_samples
         # self.metrics = metrics
         # self.recompile_per_trial = recompile_per_trial
@@ -105,9 +103,10 @@ class Trial:
         # self.metrics_data = {}
         # time_data = compile time, sample time, learning time, generating training set time
         # self.time_data = {}
-        filename = f"{path}/{self.generator.name}-{self.generator.size}/trial-{self.trial_id}.csv"
+        filename = f"{path}/trial-{self.trial_id}.csv"
 
-        
+        f = open(filename, "a")
+
         if "sample_time" not in self.time_data:
             print("Trial did not run yet")
             return
@@ -136,19 +135,20 @@ class Trial:
                 gen_train_time_data = self.time_data["gen_train_time"][i]
                 data_str += f"{gen_train_time_data}"
 
-
             data_str += f"{sample_time_data}"
             for metric in self.metrics:
-                data_str += f", {self.metrics_data[metric]}"
+                data_str += f", {self.metrics_data[metric][i]}"
             data_str += "\n"
+
+        f.write(data_str)
+        f.close()
 
         # print(data_str)
 
+
 class Experiment:
     # abstract out the experiment type/ have it be in SimpleTiled
-    def __init__(
-        self, generator = None , num_samples=10, dim=2, trials=[], metrics=[]
-    ):
+    def __init__(self, generator=None, num_samples=1, dim=2, trials=[], metrics=[]):
         if generator == None:
             generator = SimpleTiled(dim=dim)
         self.generator = generator
@@ -157,7 +157,6 @@ class Experiment:
         self.trials = trials
         self.metrics = metrics
         self.metrics_data = {}
-        print(dim)
 
     def __repr__(self):
         out_str = ""
@@ -168,22 +167,39 @@ class Experiment:
 
     def run(
         self,
-        num_trials=10,
-        num_samples=10,
-        dim=2,
+        num_trials=None,
+        num_samples=None,
+        dim=None,
         metrics=[],
         recompile_per_trial=False,
         clear_true_probs=False,
     ):
-        #clearing trials always
-        self.trials.clear() 
+        # clearing trials always
+        self.trials.clear()
+
+        if not num_trials:
+            num_trials = len(self.trials)
+            if len(self.trials) == 0:
+                print("No trials ran")
+                return 
+
+        if not num_samples:
+            num_samples = self.num_samples
+
+        if not dim: 
+            dim = self.dim
 
         if len(metrics) > 0:
             self.metrics = metrics
 
         for i in range(num_trials):
             trial = Trial(
-                self.generator, num_samples, dim, self.metrics, recompile_per_trial, clear_true_probs
+                self.generator,
+                num_samples,
+                dim,
+                self.metrics,
+                recompile_per_trial,
+                clear_true_probs,
             )
             self.trials.append(trial)
         for t in self.trials:
@@ -193,10 +209,13 @@ class Experiment:
         # should return an array of the metric applied to the runs
         # we should also return the trial info somewhere in a csv
         i = 0
+        test_dir = get_subdirectory(f"{path}/")
+        path_dir = get_subdirectory(
+            f"{test_dir}/{self.generator.name}-{self.generator.dim}"
+        )
         for trial in self.trials:
             i += 1
-            output_str= trial.to_csv("")
-        pass
+            output_str = trial.to_csv(path_dir)
 
-    def add_metric_to_all_trials(self,metric):
+    def add_metric_to_all_trials(self, metric):
         self.metrics.append(metric)

@@ -157,8 +157,8 @@ class SimpleTiled(SampleBDD):
                 new_images.append(self.processed_tile(image_path, transform))
 
         outer_index = 0
-        for i in range(0, self.size):
-            for j in range(0, self.size):
+        for i in range(0, self.dim):
+            for j in range(0, self.dim):
                 relvant_image = new_images[outer_index]
                 final_image.paste(relvant_image, ((i * self.tile_size[0]), (j * self.tile_size[1])))
                 outer_index += 1

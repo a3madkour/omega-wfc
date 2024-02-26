@@ -11,56 +11,53 @@ from SampleBDD import SampleBDD
 from Experiment import Experiment, Metric
 from utils import get_subdirectory, get_all_elements_in_dir
        
-
-
-def gen_n_models(generator,n,check_sat=False):
-    models = []
-    it = generator.bdd.pick_iter(generator.bdd_node)
-    total_number_of_models =  int(generator.bdd.count(generator.bdd_node))
-    actual_number_of_models = n
-    if n > total_number_of_models:
-        print(f"In gen_n_models specified n,{n},is greater than the number of models in the generator,{total_number_of_models},so we are clipping")
-        actual_number_of_models = total_number_of_models
-
-
-    for i in range(actual_number_of_models):
-        model = next(it)
-        model_bit_string = generator.sample_as_bit_string(model)
-        if check_sat:
-            if not generator.sat_omega_model(model):
-                print(f"yo we got an unsat model over here: {model}")
-                
-        models.append((model,model_bit_string))
-
-    return (models,actual_number_of_models)
-
-
-
-def save_models(filename,models, append=False):
-    if append:
-        f = open(f"{filename}", 'a')
-    else:
-        f = open(f"{filename}", 'w')
-    for model_tup in models:
-        (_, model_bit_string) = model_tup
-        f.write(f"{model_bit_string}\n")
-    f.close()
-
 # names =  ["Castle", "Circles","Circuit", "FloorPlan", "Knots", "Rooms", "Summer"]
-names = ["FloorPlan", "Rooms"]
+# names = ["FloorPlan", "Rooms"]
 # sizes = [2,5]
-sizes = [2,5,10]
-num_models = [10,100,1000,10000,100000]
-for name in names:
-    for dim in sizes:
-        for num_mod in num_models:
-            experiment = Experiment(dim=dim)
-            # print(experiment)
-            # experiment.add_metric_to_all_trials(Metric.bit_string_metric(experiment.generator))
-            experiment.run(num_samples=1)
-            (models,actual_number_of_models) = gen_n_models(experiment.generator,num_mod)
-            path = get_subdirectory(f"{name}-{dim}x{dim}")
-            save_models(f"{path}/first_{actual_number_of_models}_models.txt",models)
+# sizes = [2,5,10]
+# num_models = [10,100,1000,10000,100000]
+
+f = open("models/Simpletiled/Knots-2x2/first_10_models.txt", "r")
+# for line in f.readlines():
+#     experiment = Experiment(dim=2)
+#     experiment.run()
+#     models = experiment.generator.gen_n_models(1)
+
+#     break
+
+
+
+num_samples = [1000,10000]
+dims = [2]
+epochs = [100,1000,10000]
+for num_samples in num_samples:
+    for dim in dims:
+        experiment = Experiment(dim=dim, num_samples = num_samples)
+        experiment.add_metric_to_all_trials(Metric.bit_string_metric(experiment.generator))
+        experiment.run(num_trials=1)
+        experiment.to_csv(f"no-learning-{num_samples}-samples")
+        for epoch in epochs:
+            (actual_number_of_models,models) = experiment.generator.gen_n_models(epoch)
+            actual_models = []
+            for model in models:
+                (actual_model, model_string) = model
+                actual_models.append(actual_model)
+            assignments = []
+            experiment.generator.assign_weights()
+            experiment.generator.train_with_one_run(actual_models)
+            experiment.run(clear_true_probs=True, num_trials=1)
+            experiment.to_csv(f"train-on-{actual_number_of_models}-models-{num_samples}-samples")
+
+# for name in names:
+#     for dim in sizes:
+#         for num_mod in num_models:
+#             experiment = Experiment(dim=dim)
+#             # print(experiment)
+#             # experiment.add_metric_to_all_trials(Metric.bit_string_metric(experiment.generator))
+#             experiment.run(num_samples=1)
+#             (models,actual_number_of_models) = gen_n_models(experiment.generator,num_mod)
+#             path = get_subdirectory(f"{name}-{dim}x{dim}")
+#             save_models(f"{path}/first_{actual_number_of_models}_models.txt",models)
         # experiment.to_csv("back")
         # print(experiment)
         # print(experiment)

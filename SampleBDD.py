@@ -36,6 +36,41 @@ class SampleBDD:
         # if not self.bdd_node:
         #     sys.exit("No filename or bdd_node passed to SampleBDD")
 
+    def gen_n_models(self,n,check_sat=False):
+        models = []
+        it = self.bdd.pick_iter(self.bdd_node)
+        total_number_of_models =  int(self.bdd.count(self.bdd_node))
+        actual_number_of_models = n
+        if n > total_number_of_models:
+            print(f"In gen_n_models specified n,{n},is greater than the number of models in the generator,{total_number_of_models},so we are clipping")
+            actual_number_of_models = total_number_of_models
+
+
+        for i in range(actual_number_of_models):
+            model = next(it)
+            model_bit_string = self.sample_as_bit_string(model)
+            if check_sat:
+                if not self.sat_omega_model(model):
+                    print(f"yo we got an unsat model over here: {model}")
+
+            models.append((model,model_bit_string))
+
+        return (actual_number_of_models, models)
+
+
+
+    def save_models(filename,models, append=False):
+        if append:
+            f = open(f"{filename}", 'a')
+        else:
+            f = open(f"{filename}", 'w')
+        for model_tup in models:
+            (model, model_bit_string) = model_tup
+            f.write(f"{model_bit_string}\n")
+        f.close()
+
+
+
     def assign_weights(self, weight=0.5):
         for var in self.bdd.vars:
             self.weights[var] = (1.0 - weight, weight)
@@ -152,17 +187,27 @@ class SampleBDD:
 
     def sample_as_bit_map(self, sample):
         sample_bit_map = {}
+
+        total_vars = len(self.bdd.vars)
+        for i in range(total_vars):
+            sample_bit_map[i] = int(0)
+
         for sample_id in sample:
             sample_bit_map[sample_id] = int(sample[sample_id])
 
         return sample_bit_map
 
     def sample_as_bit_string(self, sample):
-        #TODO
-        return "".join([str(int(sample[bit])) for bit in self.sample_as_bit_map(sample)])
-    # def draw_sample(self,sample):
-    #     num_bits = (self.bdd._number_of_cudd_vars() / N) / N
-    # final_assignment = []
+        sample_bit_map = self.sample_as_bit_map(sample)
+        sample_bit_vec = []
+        for bit in sample_bit_map:
+            if bit not in sample:
+                sample_bit_vec.append(0)
+            else:
+                sample_bit_vec.append(sample[bit])
+
+        return "".join([str(int(bit)) for bit in sample_bit_vec ])
+
     def dump_bdd(
         self,
         filename,
@@ -185,10 +230,11 @@ class SampleBDD:
         self.weights = json_data["weights"]
 
     def bin_assignment(self, delta, distance):
+        #TODO
         pass
 
     #ASSUMEs get_assignement is implemented, if I could be bothered I will add it to an interface
-    def gen_uniform_training_set(
+    def gen_sample_training_set(
         self,
         dirname,
         tile_vec,
@@ -212,7 +258,7 @@ class SampleBDD:
         pickle.dump(assignments, pickle_file)
         pickle_file.close()
 
-    def load_assignments_set(self, assign_pickle_file):
+    def load_sample_assignments_set(self, assign_pickle_file):
         pickle_file = open(assign_pickle_file, "rb")
         assignments = pickle.load(pickle_file)
         pickle_file.close()
@@ -247,10 +293,12 @@ class SampleBDD:
             counts[i] = 0
 
         for assignment in assignments:
+            # print(type(assignment))
             # print(assignment)
             for i, bit in enumerate(assignment):
+                # print("bit", bit)
                 # print(i)
-                if bit == 1:
+                if int(assignment[bit]) == 1:
                     counts[i] = counts[i] + 1
 
         if update_weights:
@@ -259,6 +307,8 @@ class SampleBDD:
                 low = 1.0 - high
                 self.weights[self.bdd.var_at_level(bit)] = (low, high)
 
+        # print(self.weights)
+        # print(counts)
         return counts
 
     def sat_omega_model(self, model):
