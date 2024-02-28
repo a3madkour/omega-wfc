@@ -1,29 +1,48 @@
-* TODO Implement 3x3 pattern extraction
-SCHEDULED: <2024-02-19 Mon>
-* TODO Implement sampling
-SCHEDULED: <2024-02-19 Mon>
-* TODO Implement the constraints on top of WFC
-SCHEDULED: <2024-02-20 Tue>
-* TODO Implement mario level as circuit
-SCHEDULED: <2024-02-21 Wed>
-
 * TODO Emphasize that checking too (if needed) is an efficient operation 
 
-* TODO Actual TODO
+* TODO Nice to have TODO
+** TODO Implement 3x3 pattern extraction
+SCHEDULED: <2024-02-19 Mon>
+** TODO Implement sampling
+SCHEDULED: <2024-02-19 Mon>
+** TODO Implement the constraints on top of WFC
+SCHEDULED: <2024-02-20 Tue>
+** TODO Implement mario level as circuit
+SCHEDULED: <2024-02-21 Wed>
 ** DONE fix float division by zero error
 ** DONE set up saveing and loading bdd to the wrapper
 ** DONE clean up files
 ** DONE make a git push
 ** DONE Set up learning
-** TODO figure out why the right most coner is sometimes wrong
-** TODO Implement hamming distance
+** DONE figure out why the right most coner is sometimes wrong
 ** DONE Hash the assingnments
 Hashing the assignments can also be seen as assigning a sample to a bucket. The assumption is everything in the bucket is close enough to considered repetition.
 ** DONE Have a check procedure to see if the answer is valid
 ** DONE Set up metrics class
-** TODO Store results of experiments
-*** TODO Observe how often each hash shows up in the sampling before and after training
+** DONE Store results of experiments
+** TODO Implement hamming distance
+*** TODO easy of computing the hamming distance
 ** TODO hierachircal clustring
-** TODO look into what the cube is, because randomizing that might also help
+# ** TODO look into what the cube is, because randomizing that might also help
 ** TODO demonstrate circuit viability in godot
-** TODO Relate the knowledge compilation stuff to understanding the minimum sized program capable of expressing the design domain in question (reference Micheal Cook's student's paper)
+** TODO We can condition on it.
+
+* TODO NEED TODO TODO
+** DONE Uniform Sampling with model counts
+** DONE Incorporate Adam's stuff
+** DONE Compute marignal probs
+** TODO Draw mario level
+** TODO Generate figures:
+*** TODO Amortized inference: Line go down
+*** TODO Distance grid of marignal dists
+*** TODO Generate 3 sample from uniform; 3 sample from ad-hoc
+*** TODO Exhaustive expressive range analysis
+*** TODO Chart analytic count; in terms of models counts of specific variables and in terms of conditioning on other things
+That is we can find how many reachablle tiles in our generator expilittly.
+
+** TODO Setup wfc experiments on server and run them
+** TODO Setup ASP for wfc 
+*** DO NOT MAKE AN EXPERIMENT CLASS FOR IT 
+** TODO Setup ASP for platformer
+** TODO Demonstrate support of online imprinting
+Run experiments on observes on how little they cost

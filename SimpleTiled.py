@@ -11,6 +11,7 @@ from SampleBDD import SampleBDD, SampleFormat
 
 class TileSet(Enum):
     Knots = "Knots"
+    Circuit = "Circuit"
 
 
 class SimpleTiled(SampleBDD):
@@ -102,21 +103,24 @@ class SimpleTiled(SampleBDD):
         end_time = end - start
         self.bdd_node = generator
         self.bdd = generator.bdd
+        self.context = context
 
         self.is_compiled = True
         return end_time
         
  
-
-
-
     def get_assignment(
         self, sample, sample_format=SampleFormat.Value
     ):
 
         num_bits = (self.bdd._number_of_cudd_vars() / self.dim) / self.dim
         final_assignment = []
-        sample_bit_vec = self.sample_as_bit_vec(sample)
+        sample_bit_vec = []
+        for bit in self.sample_bit_map(sample):
+            if bit not in sample:
+                sample_bit_vec.append(0)
+            else:
+                sample_bit_vec.append(sample[bit])
 
         if sample_format == SampleFormat.Bit:
             return sample_bit_vec
@@ -138,7 +142,6 @@ class SimpleTiled(SampleBDD):
         return final_assignment
 
 
-    
     def draw_simple_tiled(self,sample_assignment):
         # this assumes an order which it should not
         final_image_height = self.size * self.tile_size[0]
@@ -190,5 +193,13 @@ class SimpleTiled(SampleBDD):
 
         return newim
 
+    def get_spec_headers(self):
+        return ["Dimension","TileSet"]
+
+    def get_header_value(self, header):
+        if header == "Dimension":
+            return self.dim
+        elif header == "TileSet":
+            return self.tileset.value
 
 

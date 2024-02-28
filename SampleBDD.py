@@ -25,6 +25,8 @@ class SampleBDD:
         self.tree_true_probs = {}
         self.bdd_node = None
         self.bdd = None
+        self.context = None
+        self.dim = None
 
         if filename:
             self.load_bdd(filename)
@@ -36,15 +38,16 @@ class SampleBDD:
         # if not self.bdd_node:
         #     sys.exit("No filename or bdd_node passed to SampleBDD")
 
-    def gen_n_models(self,n,check_sat=False):
+    def gen_n_models(self, n, check_sat=False):
         models = []
         it = self.bdd.pick_iter(self.bdd_node)
-        total_number_of_models =  int(self.bdd.count(self.bdd_node))
+        total_number_of_models = int(self.bdd.count(self.bdd_node))
         actual_number_of_models = n
         if n > total_number_of_models:
-            print(f"In gen_n_models specified n,{n},is greater than the number of models in the generator,{total_number_of_models},so we are clipping")
+            print(
+                f"In gen_n_models specified n,{n},is greater than the number of models in the generator,{total_number_of_models},so we are clipping"
+            )
             actual_number_of_models = total_number_of_models
-
 
         for i in range(actual_number_of_models):
             model = next(it)
@@ -53,29 +56,25 @@ class SampleBDD:
                 if not self.sat_omega_model(model):
                     print(f"yo we got an unsat model over here: {model}")
 
-            models.append((model,model_bit_string))
+            models.append((model, model_bit_string))
 
         return (actual_number_of_models, models)
 
-
-
-    def save_models(filename,models, append=False):
+    def save_models(filename, models, append=False):
         if append:
-            f = open(f"{filename}", 'a')
+            f = open(f"{filename}", "a")
         else:
-            f = open(f"{filename}", 'w')
+            f = open(f"{filename}", "w")
         for model_tup in models:
             (model, model_bit_string) = model_tup
             f.write(f"{model_bit_string}\n")
         f.close()
 
-
-
     def assign_weights(self, weight=0.5):
         for var in self.bdd.vars:
             self.weights[var] = (1.0 - weight, weight)
 
-    def compute_true_probs(self, bdd_node):
+    def compute_weight_probs(self, bdd_node):
         if bdd_node == self.bdd.true:
             self.tree_true_probs[bdd_node.__hash__()] = 1.0
             return 1.0
@@ -85,12 +84,46 @@ class SampleBDD:
 
         (low, high) = self.weights[bdd_node.var]
         if bdd_node.low.__hash__() not in self.tree_true_probs:
-            self.compute_true_probs(bdd_node.low)
+            self.compute_weight_probs(bdd_node.low)
 
         low_tree_prob = self.tree_true_probs[bdd_node.low.__hash__()]
 
         if bdd_node.high.__hash__() not in self.tree_true_probs:
-            self.compute_true_probs(bdd_node.high)
+            self.compute_weight_probs(bdd_node.high)
+
+        high_tree_prob = self.tree_true_probs[bdd_node.high.__hash__()]
+
+        prob_tree = (low_tree_prob * low) + (high_tree_prob * high)
+
+        self.tree_true_probs[bdd_node.__hash__()] = prob_tree
+
+        return prob_tree
+
+    def compute_model_counts_prob(self, bdd_node):
+        if bdd_node == self.bdd.true:
+            self.tree_true_probs[bdd_node.__hash__()] = 1.0
+            print("I am got to true")
+            return 1.0
+        elif bdd_node == self.bdd.false:
+            self.tree_true_probs[bdd_node.__hash__()] = 0.0
+            print("I am got to false")
+            return 0.0
+
+        # low_node = self.bdd[bdd_node.var]
+
+        low_node = bdd_node.low
+        high_node = bdd_node.high
+        low = low_node.count() / bdd_node.count()
+        high = high_node.count() / bdd_node.count()
+
+        # (low, high) = self.weights[bdd_node.var]
+        if low_node.__hash__() not in self.tree_true_probs:
+            self.compute_model_counts_prob(low_node)
+
+        low_tree_prob = self.tree_true_probs[bdd_node.low.__hash__()]
+
+        if bdd_node.high.__hash__() not in self.tree_true_probs:
+            self.compute_model_counts_prob(bdd_node.high)
 
         high_tree_prob = self.tree_true_probs[bdd_node.high.__hash__()]
 
@@ -101,6 +134,7 @@ class SampleBDD:
         return prob_tree
 
     def sample_bdd(self, bdd_node, polarity, final_sample):
+
         if bdd_node == self.bdd.true:
             return 1.0
         elif bdd_node == self.bdd.false:
@@ -110,43 +144,42 @@ class SampleBDD:
             polarity = not polarity
 
         n = random.random()
-        (low, high) = self.weights[bdd_node.var]
 
-        prob_high = self.tree_true_probs[bdd_node.high.__hash__()] 
-        prob_low = self.tree_true_probs[bdd_node.low.__hash__()] 
+        prob_high = self.tree_true_probs[bdd_node.high.__hash__()]
+        prob_low = self.tree_true_probs[bdd_node.low.__hash__()]
 
 
-        #we need to multiply by low and high at some point
+        rev_prob_high = 1.0 - prob_high
+        rev_prob_low = 1.0 - prob_low
 
+        # print(f"Prob low: {prob_low}")
+        # print(f"Prob high: {prob_high}")
         if not polarity:
-            rev_prob_high = 1.0 - prob_high
-            rev_prob_low = 1.0 - prob_low
             if rev_prob_high != 0:
-                #check if high is 0
-                prop = (rev_prob_high) / (rev_prob_high + rev_prob_low)
+                marginal = (rev_prob_high) / (rev_prob_high + rev_prob_low)
             else:
-                prop = 0
+                marginal = 1
         else:
-            prop = prob_high / (1 - 0.0 - prob_high + 1.0 - prob_low)
+            marginal = prob_high / (prob_high + prob_low)
+
 
         if (bdd_node.high == self.bdd.true and not polarity) or (
-            bdd_node.high == self.bdd.false and not polarity
+            bdd_node.high == self.bdd.false and polarity
         ):
             final_sample[bdd_node._index] = False
-            self.sample_bdd(bdd_node.low, polarity, final_sample)
-            return 1.0
+            new_marginal = self.sample_bdd(bdd_node.low, polarity, final_sample)
         elif (
             (bdd_node.low == self.bdd.true and not polarity)
             or (bdd_node.low == self.bdd.false and not polarity)
-            or (n < prop)
+            or (n < marginal)
         ):
             final_sample[bdd_node._index] = True
-            self.sample_bdd(bdd_node.high, polarity, final_sample)
-            return 1.0
+            new_marginal = self.sample_bdd(bdd_node.high, polarity, final_sample)
         else:
             final_sample[bdd_node._index] = False
-            self.sample_bdd(bdd_node.low, polarity, final_sample)
-            return 1.0
+            new_marginal = self.sample_bdd(bdd_node.low, polarity, final_sample)
+
+        return  marginal * new_marginal
 
     def convert_binary_to_num(self, bits):
         return_value = 0
@@ -166,12 +199,12 @@ class SampleBDD:
                 f"Weights passed to sample_bdd have {len(weights)} when there are {len(self.bdd.vars)} nodes in bdd_node"
             )
 
-        start = time.monotonic_ns()
         if clear_true_probs == True:
             self.tree_true_probs.clear()
-            
-        print("Compute Probs")
-        self.compute_true_probs(self.bdd_node)
+            print("Compute Probs")
+
+        start = time.monotonic_ns()
+        self.compute_model_counts_prob(self.bdd_node)
         end = time.monotonic_ns()
         compute_true_probs_time = end - start
         print(f"Done: compute_probs {compute_true_probs_time / 1e09}s")
@@ -179,11 +212,12 @@ class SampleBDD:
         print("Sampling")
         start = time.monotonic_ns()
         final_sample = {}
-        self.sample_bdd(self.bdd_node, True, final_sample)
+        sample_marginal = self.sample_bdd(self.bdd_node, True, final_sample)
         end = time.monotonic_ns()
         sample_time = end - start
         print(f"Done: Sampling {sample_time / 1e09}s")
-        return (compute_true_probs_time, sample_time, final_sample)
+        return (compute_true_probs_time, sample_time, final_sample,sample_marginal)
+
 
     def sample_as_bit_map(self, sample):
         sample_bit_map = {}
@@ -193,7 +227,11 @@ class SampleBDD:
             sample_bit_map[i] = int(0)
 
         for sample_id in sample:
-            sample_bit_map[sample_id] = int(sample[sample_id])
+            temp_key = sample_id
+            if temp_key not in sample_bit_map:
+                temp_key = self.bdd.level_of_var(temp_key)
+
+            sample_bit_map[temp_key] = int(sample[sample_id])
 
         return sample_bit_map
 
@@ -206,13 +244,13 @@ class SampleBDD:
             else:
                 sample_bit_vec.append(sample[bit])
 
-        return "".join([str(int(bit)) for bit in sample_bit_vec ])
+        return "".join([str(int(bit)) for bit in sample_bit_vec])
 
     def dump_bdd(
         self,
         filename,
     ):
-        # do the dump thing and dumb thing and output it as json and then read it bak
+        # do the dump thing and dumb thing and output it as json and then read it back
         # Not the best but time is a factor
 
         self.bdd.dump(filename, [self.bdd_node])
@@ -230,31 +268,34 @@ class SampleBDD:
         self.weights = json_data["weights"]
 
     def bin_assignment(self, delta, distance):
-        #TODO
+        # TODO
         pass
 
-    #ASSUMEs get_assignement is implemented, if I could be bothered I will add it to an interface
+    def assignment_from_bit_string(self, bit_string):
+        assignment = {}
+        for i, bit in enumerate(bit_string):
+            label = self.bdd.var_at_level(i)
+            assignment[label] = bit
+
+        return assignment
+
+    # ASSUMEs get_assignement is implemented, if I could be bothered I will add it to an interface
     def gen_sample_training_set(
         self,
         dirname,
-        tile_vec,
-        N,
-        tile_size,
         num_samples=10,
         sample_format=SampleFormat.Bit,
     ):
         dir_path = get_subdirectory(dirname)
         assignments = []
         for i in range(num_samples):
-            (_,_,sample) = self.sample()
-            assignment = self.get_assignment(
-                sample
-            )
+            (_, _, sample,_) = self.sample()
+            assignment = self.get_assignment(sample)
             assignments.append(assignment)
 
         # pickling for now
         # format size-num_samples-runID
-        pickle_file = open(f"{dir_path}/{N}-{num_samples}-{uuid.uuid4()}.pkl", "wb")
+        pickle_file = open(f"{dir_path}/{num_samples}-{uuid.uuid4()}.pkl", "wb")
         pickle.dump(assignments, pickle_file)
         pickle_file.close()
 
@@ -285,7 +326,7 @@ class SampleBDD:
             low = 1.0 - high
             self.weights[self.bdd.var_at_level(bit)] = (low, high)
 
-        return counts
+            return counts
 
     def train_with_one_run(self, assignments, update_weights=True):
         counts = {}
@@ -312,6 +353,8 @@ class SampleBDD:
         return counts
 
     def sat_omega_model(self, model):
+        # this is a cool way of doing it but yo look at what is below
+        # cond_bdd = self.bdd.assign_from(model)
         cond_bdd = self.bdd.let(model, self.bdd_node)
 
         return self.bdd.true == cond_bdd
@@ -321,3 +364,8 @@ class SampleBDD:
 
         return self.sat_omega_model(bdd_assignment)
 
+    def get_spec_headers(self):
+        return []
+
+    def get_header_value(self, header):
+        pass

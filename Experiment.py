@@ -69,20 +69,27 @@ class Trial:
             else:
                 self.time_data["compile_time"].append(compile_time)
             print(f"Done: Compiling {compile_time / 1e09}s")
+
         if "sample_time" not in self.time_data:
             self.time_data["sample_time"] = []
 
         if "compute_true_probs_time" not in self.time_data:
             self.time_data["compute_true_probs_time"] = []
 
+        self.metrics_data["marginal"] = []
+
         for i in range(0, self.num_samples):
             (
                 compute_true_probs_time,
                 sample_time,
                 final_sample,
+                sample_marginal
             ) = self.generator.sample(clear_true_probs=self.clear_true_probs)
+
             self.time_data["compute_true_probs_time"].append(compute_true_probs_time)
             self.time_data["sample_time"].append(sample_time)
+            self.metrics_data["marginal"].append(sample_marginal)
+
             for metric in self.metrics:
                 if metric not in self.metrics_data:
                     self.metrics_data[metric] = []
@@ -103,6 +110,7 @@ class Trial:
         # self.metrics_data = {}
         # time_data = compile time, sample time, learning time, generating training set time
         # self.time_data = {}
+
         filename = f"{path}/trial-{self.trial_id}.csv"
 
         f = open(filename, "a")
@@ -111,7 +119,15 @@ class Trial:
             print("Trial did not run yet")
             return
 
-        data_str = "SampleTime"
+        data_str = f"SampleTime"
+
+        # print(self.generator.get_spec_headers())
+        for header in self.generator.get_spec_headers():
+            data_str += f",{header}"
+
+        if "marginal" in self.metrics_data:
+            data_str += ",MarginalProbability"
+
         if "learning_time" in self.time_data:
             data_str += ",LearningTime"
 
@@ -127,17 +143,24 @@ class Trial:
             sample_time_data = self.time_data["sample_time"][i]
             data_str += f"{sample_time_data}"
 
+            for header in self.generator.get_spec_headers():
+                header_value = self.generator.get_header_value(header)
+                data_str += f",{header_value}"
+
+            if "marginal" in self.metrics_data:
+                data_str += f",{self.metrics_data["marginal"][i]}"
+
             if "learning_time" in self.time_data:
                 learning_time_data = self.time_data["learning_time"][i]
-                data_str += f"{learning_time_data}"
+                data_str += f",{learning_time_data}"
 
             if "gen_train_time" in self.time_data:
                 gen_train_time_data = self.time_data["gen_train_time"][i]
-                data_str += f"{gen_train_time_data}"
+                data_str += f",{gen_train_time_data}"
 
             data_str += f"{sample_time_data}"
             for metric in self.metrics:
-                data_str += f", {self.metrics_data[metric][i]}"
+                data_str += f",{self.metrics_data[metric][i]}"
             data_str += "\n"
 
         f.write(data_str)
@@ -153,10 +176,11 @@ class Experiment:
             generator = SimpleTiled(dim=dim)
         self.generator = generator
         self.num_samples = num_samples
-        self.dim = dim
         self.trials = trials
+        self.dim = dim
         self.metrics = metrics
         self.metrics_data = {}
+        self.spec_heads = generator.get_spec_headers()
 
     def __repr__(self):
         out_str = ""
@@ -202,6 +226,7 @@ class Experiment:
                 clear_true_probs,
             )
             self.trials.append(trial)
+
         for t in self.trials:
             t.run()
 
@@ -210,12 +235,9 @@ class Experiment:
         # we should also return the trial info somewhere in a csv
         i = 0
         test_dir = get_subdirectory(f"{path}/")
-        path_dir = get_subdirectory(
-            f"{test_dir}/{self.generator.name}-{self.generator.dim}"
-        )
         for trial in self.trials:
             i += 1
-            output_str = trial.to_csv(path_dir)
+            output_str = trial.to_csv(test_dir)
 
     def add_metric_to_all_trials(self, metric):
         self.metrics.append(metric)
