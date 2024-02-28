@@ -102,11 +102,11 @@ class SampleBDD:
     def compute_model_counts_prob(self, bdd_node):
         if bdd_node == self.bdd.true:
             self.tree_true_probs[bdd_node.__hash__()] = 1.0
-            print("I am got to true")
+            # print("I am got to true")
             return 1.0
         elif bdd_node == self.bdd.false:
             self.tree_true_probs[bdd_node.__hash__()] = 0.0
-            print("I am got to false")
+            # print("I am got to false")
             return 0.0
 
         # low_node = self.bdd[bdd_node.var]
@@ -228,7 +228,7 @@ class SampleBDD:
 
         for sample_id in sample:
             temp_key = sample_id
-            if temp_key not in sample_bit_map:
+            if temp_key not in sample_bit_map and temp_key < len(self.bdd.vars):
                 temp_key = self.bdd.level_of_var(temp_key)
 
             sample_bit_map[temp_key] = int(sample[sample_id])

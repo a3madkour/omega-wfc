@@ -42,7 +42,6 @@ class Trial:
         self,
         generator,
         num_samples,
-        dim,
         metrics,
         recompile_per_trial,
         clear_true_probs,
@@ -111,6 +110,7 @@ class Trial:
         # time_data = compile time, sample time, learning time, generating training set time
         # self.time_data = {}
 
+        print(self.metrics_data)
         filename = f"{path}/trial-{self.trial_id}.csv"
 
         f = open(filename, "a")
@@ -119,7 +119,7 @@ class Trial:
             print("Trial did not run yet")
             return
 
-        data_str = f"SampleTime"
+        data_str = f"CompileTime,BDDSize,SampleTime"
 
         # print(self.generator.get_spec_headers())
         for header in self.generator.get_spec_headers():
@@ -140,6 +140,12 @@ class Trial:
         data_str += "\n"
 
         for i in range(self.num_samples):
+            compile_time = self.time_data["compile_time"][0]
+            data_str += f"{compile_time}"
+
+            bdd_size = self.generator.bdd_node.dag_size
+            data_str += f"{bdd_size}"
+
             sample_time_data = self.time_data["sample_time"][i]
             data_str += f"{sample_time_data}"
 
@@ -159,6 +165,7 @@ class Trial:
                 data_str += f",{gen_train_time_data}"
 
             data_str += f"{sample_time_data}"
+            print(self.metrics)
             for metric in self.metrics:
                 data_str += f",{self.metrics_data[metric][i]}"
             data_str += "\n"
@@ -193,7 +200,6 @@ class Experiment:
         self,
         num_trials=None,
         num_samples=None,
-        dim=None,
         metrics=[],
         recompile_per_trial=False,
         clear_true_probs=False,
@@ -210,8 +216,6 @@ class Experiment:
         if not num_samples:
             num_samples = self.num_samples
 
-        if not dim: 
-            dim = self.dim
 
         if len(metrics) > 0:
             self.metrics = metrics
@@ -220,7 +224,6 @@ class Experiment:
             trial = Trial(
                 self.generator,
                 num_samples,
-                dim,
                 self.metrics,
                 recompile_per_trial,
                 clear_true_probs,

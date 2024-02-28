@@ -107,15 +107,20 @@ design = np.zeros((2,2),dtype=float)
 # experiment.add_metric_to_all_trials(Metric.bit_string_metric(experiment.generator))
 # experiment.run(num_trials=1)
 # experiment.to_csv(f"experiments")
-num_iterations = 1000
+num_iterations = 1
 num_samples = [1000,10000]
-dims = [2,5,10]
+# dims = [2,5,10]
+# dims = [5,10]
+dims = [2,5]
 for i in range(num_iterations):
-    for num_sample in num_samples:
-        for dim in dims:
-            experiment = Experiment(dim = dim, num_samples=num_sample)
-            experiment.add_metric_to_all_trials(Metric.bit_string_metric(experiment.generator))
-            experiment.to_csv(f"Knots-{num_samples}")
+    for dim in dims:
+        experiment = Experiment(dim=dim) 
+        experiment.metrics = []
+        experiment.add_metric_to_all_trials(Metric.bit_string_metric(experiment.generator))
+        for num_sample in num_samples:
+            experiment.run(num_samples=num_sample, num_trials = 1, recompile_per_trial=True)
+            experiment.to_csv(f"Knots-{num_sample}")
+
 
 # dims = [2]
 # epochs = [100,1000,10000]
