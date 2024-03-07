@@ -18,7 +18,6 @@ class Platformer(SampleBDD):
 
     
     def compile(self):
-
         start = time.monotonic_ns()
         var_names = {(i,j): f"solid_{i}_{j}" for i in range(self.width) for j in range(self.height)}
         self.var_names = var_names
@@ -63,7 +62,7 @@ class Platformer(SampleBDD):
 
         playable = reachable[(self.width-1,0)]
 
-        spec = playable & ~solid[(0,self.height-1)]
+        spec = playable & ~solid[(0,self.height-1)] & solid[(0,0)]
 
         self.bdd_node = spec
         self.bdd = spec.bdd
@@ -80,33 +79,9 @@ class Platformer(SampleBDD):
         self, sample, sample_format=SampleFormat.Value
     ):
 
-        num_bits = (self.bdd._number_of_cudd_vars() / self.width) / self.width
-        final_assignment = []
-        sample_bit_vec = []
-
-        for bit in self.sample_as_bit_map(sample):
-            if bit not in sample:
-                sample_bit_vec.append(0)
-            else:
-                sample_bit_vec.append(sample[bit])
-
-        if sample_format == SampleFormat.Bit:
-            return sample_bit_vec
-
-        print(sample_bit_vec)
-        for i in range(0, self.dim):
-            final_assignment.append([])
-            for j in range(0, self.dim):
-                current_index = int(i * self.dim * num_bits + j * num_bits)
-                end_index = int(current_index + num_bits)
-                # print(
-                #     self.convert_binary_to_num(
-                #     sample_bit_vec[current_index:end_index]
-                # )
-                # )
-                final_assignment[i].append(
-                    self.convert_binary_to_num(sample_bit_vec[current_index:end_index])
-                )
+        final_assignment = {}
+        for index in sample:
+            final_assignment[self.bdd.var_at_level(index)] = sample[index]
 
         return final_assignment
 
@@ -120,4 +95,28 @@ class Platformer(SampleBDD):
         elif header == "Height":
             return self.height
 
+    def analytical_expressive_range_analysis(self, expr=None):
+        # we need to iterate over all the possbilites right?
+        # So how many times does i,j cell be tile t
+        # TODO: Figure out how to use the cached counts tree_true_probs
+
+        era_counts = {}
+        # each location in the grid
+        assign_count = {}
+
+        bdd_node = self.bdd_node
+        if expr:
+            bdd_node = self.bdd_node & expr
+
+        for assign_cell in self.context.vars:
+            kop = self.context.vars[assign_cell]
+            assign_cell_count = []
+            assignment = {str(assign_cell): True}
+            rs = self.context.let(assignment, bdd_node)
+            co = int(rs.count())
+            assign_cell_count.append(co)
+            assign_count[assign_cell] = assign_cell_count
+
+            # print(assign_cell)
+        return assign_count
 

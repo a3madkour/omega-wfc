@@ -36,6 +36,10 @@ class Metric:
     def bit_string_metric(generator):
         return Metric(lambda x: generator.sample_as_bit_string(x), "BitString")
 
+    def hash_metric(generator):
+        return Metric(lambda x: generator.sample_as_assignment_string(x), "Hash")
+
+
 
 class Trial:
     def __init__(
@@ -125,6 +129,10 @@ class Trial:
         for header in self.generator.get_spec_headers():
             data_str += f",{header}"
 
+        if "compute_true_probs_time" in self.time_data:
+            data_str += ",ComputeProbs"
+
+
         if "marginal" in self.metrics_data:
             data_str += ",MarginalProbability"
 
@@ -144,14 +152,16 @@ class Trial:
             data_str += f"{compile_time}"
 
             bdd_size = self.generator.bdd_node.dag_size
-            data_str += f"{bdd_size}"
+            data_str += f",{bdd_size}"
 
             sample_time_data = self.time_data["sample_time"][i]
-            data_str += f"{sample_time_data}"
+            data_str += f",{sample_time_data}"
 
             for header in self.generator.get_spec_headers():
                 header_value = self.generator.get_header_value(header)
                 data_str += f",{header_value}"
+
+            data_str += f",{self.time_data["compute_true_probs_time"][i]}"
 
             if "marginal" in self.metrics_data:
                 data_str += f",{self.metrics_data["marginal"][i]}"
@@ -164,10 +174,9 @@ class Trial:
                 gen_train_time_data = self.time_data["gen_train_time"][i]
                 data_str += f",{gen_train_time_data}"
 
-            data_str += f"{sample_time_data}"
-            print(self.metrics)
             for metric in self.metrics:
                 data_str += f",{self.metrics_data[metric][i]}"
+
             data_str += "\n"
 
         f.write(data_str)
@@ -186,7 +195,6 @@ class Experiment:
         self.trials = trials
         self.dim = dim
         self.metrics = metrics
-        self.metrics_data = {}
         self.spec_heads = generator.get_spec_headers()
 
     def __repr__(self):

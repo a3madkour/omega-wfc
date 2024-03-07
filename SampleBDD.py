@@ -23,6 +23,8 @@ class SampleBDD:
         "docstring"
         self.weights = {}
         self.tree_true_probs = {}
+        self.cached_counts = {}
+        self.support = {}
         self.bdd_node = None
         self.bdd = None
         self.context = None
@@ -74,6 +76,33 @@ class SampleBDD:
         for var in self.bdd.vars:
             self.weights[var] = (1.0 - weight, weight)
 
+    def compute_count_probs(self, bdd_node):
+        if bdd_node == self.bdd.true:
+            self.tree_true_probs[bdd_node.__hash__()] = 1.0
+            return 1.0
+        elif bdd_node == self.bdd.false:
+            self.tree_true_probs[bdd_node.__hash__()] = 0.0
+            return 0.0
+
+        low = self.cached_counts[bdd_node.low.__hash__()] / self.cached_counts[bdd_node.__hash__()]
+        high = self.cached_counts[bdd_node.high.__hash__()] / self.cached_counts[bdd_node.__hash__()]
+
+        if bdd_node.low.__hash__() not in self.tree_true_probs:
+            self.compute_weight_probs(bdd_node.low)
+
+        low_tree_prob = self.tree_true_probs[bdd_node.low.__hash__()]
+
+        if bdd_node.high.__hash__() not in self.tree_true_probs:
+            self.compute_weight_probs(bdd_node.high)
+
+        high_tree_prob = self.tree_true_probs[bdd_node.high.__hash__()]
+
+        prob_tree = (low_tree_prob * low) + (high_tree_prob * high)
+
+        self.tree_true_probs[bdd_node.__hash__()] = prob_tree
+
+        return prob_tree
+
     def compute_weight_probs(self, bdd_node):
         if bdd_node == self.bdd.true:
             self.tree_true_probs[bdd_node.__hash__()] = 1.0
@@ -99,42 +128,48 @@ class SampleBDD:
 
         return prob_tree
 
-    def compute_model_counts_prob(self, bdd_node):
+    def compute_cached_model_counts(self, bdd_node):
         if bdd_node == self.bdd.true:
-            self.tree_true_probs[bdd_node.__hash__()] = 1.0
+            self.cached_counts[bdd_node.__hash__()] = 1.0
+            self.support[bdd_node.__hash__()] = len(bdd_node.support)
             # print("I am got to true")
-            return 1.0
         elif bdd_node == self.bdd.false:
-            self.tree_true_probs[bdd_node.__hash__()] = 0.0
-            # print("I am got to false")
-            return 0.0
+            self.cached_counts[bdd_node.__hash__()] = 0.0
+            self.support[bdd_node.__hash__()] = len(bdd_node.support)
 
-        # low_node = self.bdd[bdd_node.var]
+        if bdd_node.var is None:
+            if bdd_node.negated:
+                self.cached_counts[bdd_node.__hash__()] = 0
+                self.support[bdd_node.__hash__()] = 0
+            else:
+                self.cached_counts[bdd_node.__hash__()] = 1
+                self.support[bdd_node.__hash__()] = 1
+            return
 
-        low_node = bdd_node.low
-        high_node = bdd_node.high
-        low = low_node.count() / bdd_node.count()
-        high = high_node.count() / bdd_node.count()
+        # if bdd_node.high:
+        #     high_boost = 2**(len(bdd_node.support) - len(bdd_node.high.support)-1)
+        
+        # if bdd_node.low:
+        #     low_boost =  2**(len(bdd_node.support) - len(bdd_node.low.support)-1)
 
-        # (low, high) = self.weights[bdd_node.var]
-        if low_node.__hash__() not in self.tree_true_probs:
-            self.compute_model_counts_prob(low_node)
+        if bdd_node.high.__hash__() not in self.cached_counts:
+            self.compute_cached_model_counts(bdd_node.high)
+        if bdd_node.low.__hash__() not in self.cached_counts:
+            self.compute_cached_model_counts(bdd_node.low)
 
-        low_tree_prob = self.tree_true_probs[bdd_node.low.__hash__()]
 
-        if bdd_node.high.__hash__() not in self.tree_true_probs:
-            self.compute_model_counts_prob(bdd_node.high)
+        high_count =  self.cached_counts[bdd_node.high.__hash__()]
+        low_count =  self.cached_counts[bdd_node.low.__hash__()]
 
-        high_tree_prob = self.tree_true_probs[bdd_node.high.__hash__()]
+        n = high_count + low_count
 
-        prob_tree = (low_tree_prob * low) + (high_tree_prob * high)
+        if bdd_node.negated:
+            self.cached_counts[bdd_node.__hash__()] = 2**len(bdd_node.support) - n
+        else:
+            self.cached_counts[bdd_node.__hash__()] = n
 
-        self.tree_true_probs[bdd_node.__hash__()] = prob_tree
-
-        return prob_tree
 
     def sample_bdd(self, bdd_node, polarity, final_sample):
-
         if bdd_node == self.bdd.true:
             return 1.0
         elif bdd_node == self.bdd.false:
@@ -148,7 +183,6 @@ class SampleBDD:
         prob_high = self.tree_true_probs[bdd_node.high.__hash__()]
         prob_low = self.tree_true_probs[bdd_node.low.__hash__()]
 
-
         rev_prob_high = 1.0 - prob_high
         rev_prob_low = 1.0 - prob_low
 
@@ -161,7 +195,6 @@ class SampleBDD:
                 marginal = 1
         else:
             marginal = prob_high / (prob_high + prob_low)
-
 
         if (bdd_node.high == self.bdd.true and not polarity) or (
             bdd_node.high == self.bdd.false and polarity
@@ -179,13 +212,13 @@ class SampleBDD:
             final_sample[bdd_node._index] = False
             new_marginal = self.sample_bdd(bdd_node.low, polarity, final_sample)
 
-        return  marginal * new_marginal
+        return marginal * new_marginal
 
     def convert_binary_to_num(self, bits):
         return_value = 0
         bits.reverse()
         for bit in bits:
-            return_value = (return_value << 1) + bit
+            return_value = (return_value << 1) + int(bit)
         return return_value
 
     def sample(self, weights=None, clear_true_probs=False):
@@ -204,7 +237,8 @@ class SampleBDD:
             print("Compute Probs")
 
         start = time.monotonic_ns()
-        self.compute_model_counts_prob(self.bdd_node)
+        self.compute_cached_model_counts(self.bdd_node)
+        self.compute_count_probs(self.bdd_node)
         end = time.monotonic_ns()
         compute_true_probs_time = end - start
         print(f"Done: compute_probs {compute_true_probs_time / 1e09}s")
@@ -216,8 +250,8 @@ class SampleBDD:
         end = time.monotonic_ns()
         sample_time = end - start
         print(f"Done: Sampling {sample_time / 1e09}s")
-        return (compute_true_probs_time, sample_time, final_sample,sample_marginal)
-
+        print(final_sample)
+        return (compute_true_probs_time, sample_time, final_sample, sample_marginal)
 
     def sample_as_bit_map(self, sample):
         sample_bit_map = {}
@@ -234,6 +268,17 @@ class SampleBDD:
             sample_bit_map[temp_key] = int(sample[sample_id])
 
         return sample_bit_map
+
+    def sample_as_assignment_string(self, sample):
+        assignment = self.get_assignment(sample)
+
+        return_str = ""
+        for row in assignment:
+            for el in row:
+                return_str += str(el)
+
+        return return_str
+
 
     def sample_as_bit_string(self, sample):
         sample_bit_map = self.sample_as_bit_map(sample)
@@ -279,6 +324,14 @@ class SampleBDD:
 
         return assignment
 
+    def index_assignment_from_bit_string(self, bit_string):
+        assignment = {}
+        for i, bit in enumerate(bit_string):
+            label = self.bdd.var_at_level(i)
+            assignment[i] = bit
+
+        return assignment
+
     # ASSUMEs get_assignement is implemented, if I could be bothered I will add it to an interface
     def gen_sample_training_set(
         self,
@@ -289,7 +342,7 @@ class SampleBDD:
         dir_path = get_subdirectory(dirname)
         assignments = []
         for i in range(num_samples):
-            (_, _, sample,_) = self.sample()
+            (_, _, sample, _) = self.sample()
             assignment = self.get_assignment(sample)
             assignments.append(assignment)
 
@@ -369,3 +422,4 @@ class SampleBDD:
 
     def get_header_value(self, header):
         pass
+

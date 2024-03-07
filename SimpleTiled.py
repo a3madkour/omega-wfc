@@ -6,7 +6,7 @@ import sys
 import json
 from SampleBDD import SampleBDD, SampleFormat
 
-#tile_counts
+# tile_counts
 
 
 class TileSet(Enum):
@@ -15,7 +15,7 @@ class TileSet(Enum):
 
 
 class SimpleTiled(SampleBDD):
-    def __init__(self, tileset=TileSet.Knots, dim = 2, path = "tileset-json"):
+    def __init__(self, tileset=TileSet.Knots, dim=2, path="tileset-json"):
         super().__init__()
         self.tileset = tileset
         self.dim = dim
@@ -24,6 +24,7 @@ class SimpleTiled(SampleBDD):
         self.is_compiled = False
         self.tile_vec = None
         self.tile_size = None
+        self.varnames = {}
 
     def compile(self):
         file = open(f"{self.path}/{self.name}-patterns.json")
@@ -47,6 +48,7 @@ class SimpleTiled(SampleBDD):
                 var = f"assign_{i}_{j}"
                 variables[var] = (0, T - 1)
                 locations[var] = (i, j)
+                self.varnames[(i,j)] = var
         context = Context()
         context.declare(**variables)
         context.bdd.configure(reordering=False)
@@ -107,16 +109,12 @@ class SimpleTiled(SampleBDD):
 
         self.is_compiled = True
         return end_time
-        
- 
-    def get_assignment(
-        self, sample, sample_format=SampleFormat.Value
-    ):
 
+    def get_assignment(self, sample, sample_format=SampleFormat.Value):
         num_bits = (self.bdd._number_of_cudd_vars() / self.dim) / self.dim
         final_assignment = []
         sample_bit_vec = []
-        for bit in self.sample_bit_map(sample):
+        for bit in self.sample_as_bit_map(sample):
             if bit not in sample:
                 sample_bit_vec.append(0)
             else:
@@ -141,34 +139,96 @@ class SimpleTiled(SampleBDD):
 
         return final_assignment
 
-
-    def draw_simple_tiled(self,sample_assignment):
+    def draw_simple_tiled_asp(self, sample_assignment):
         # this assumes an order which it should not
-        final_image_height = self.size * self.tile_size[0]
-        final_image_width = self.size * self.tile_size[1]
+        final_image_height = self.dim * self.tile_size[0]
+        final_image_width = self.dim * self.tile_size[1]
         final_image = Image.new("RGBA", (final_image_height, final_image_width))
 
         self.tile_vec.sort(key=lambda x: x["index"])
+
         new_images = []
         for row in sample_assignment:
-            for el in row:
+            # for el in row:
                 # TODO: this is not the index you are looking for
                 # el is the index of the tile type not the bit value?
-                tile_info = self.tile_vec[el]
-                image_path = tile_info["image_path"]
-                transform = tile_info["transformation"]
-                new_images.append(self.processed_tile(image_path, transform))
+                # tile_info = self.tile_vec[el]
+            print("row: ", row)
+            tile_info = self.tile_vec[sample_assignment[row]]
+            image_path = tile_info["image_path"]
+            transform = tile_info["transformation"]
+            new_images.append(self.processed_tile(image_path, transform))
 
         outer_index = 0
         for i in range(0, self.dim):
             for j in range(0, self.dim):
                 relvant_image = new_images[outer_index]
-                final_image.paste(relvant_image, ((i * self.tile_size[0]), (j * self.tile_size[1])))
+                final_image.paste(
+                    relvant_image, ((i * self.tile_size[0]), (j * self.tile_size[1]))
+                )
                 outer_index += 1
+
         return final_image
 
 
-    def processed_tile(self,image_path, transformation):
+    def draw_simple_tiled(self, sample_assignment):
+        # this assumes an order which it should not
+        final_image_height = self.dim * self.tile_size[0]
+        final_image_width = self.dim * self.tile_size[1]
+        final_image = Image.new("RGBA", (final_image_height, final_image_width))
+
+        self.tile_vec.sort(key=lambda x: x["index"])
+
+        new_images = []
+        for row in sample_assignment:
+            # for el in row:
+                # TODO: this is not the index you are looking for
+                # el is the index of the tile type not the bit value?
+                # tile_info = self.tile_vec[el]
+                tile_info = self.tile_vec[row]
+                image_path = tile_info["image_path"]
+                transform = tile_info["transformation"]
+                new_images.append(self.processed_tile_asp(image_path, transform))
+
+        outer_index = 0
+        for i in range(0, self.dim):
+            for j in range(0, self.dim):
+                relvant_image = new_images[outer_index]
+                final_image.paste(
+                    relvant_image, ((i * self.tile_size[0]), (j * self.tile_size[1]))
+                )
+                outer_index += 1
+
+        return final_image
+
+    def processed_tile_asp(self, image_path, transformation):
+        im = Image.open(image_path)
+        newim = im
+        if transformation == 1:
+            newim = im.rotate(270)
+        elif transformation == 2:
+            newim = im.rotate(180)
+        elif transformation == 3:
+            newim = im.rotate(90)
+        elif transformation == 4:
+            newim = im.mirror()
+        elif transformation == 5:
+            newim = newim.mirror()
+            newim = im.rotate(90)
+        elif transformation == 5:
+            newim = newim.mirror()
+            newim = im.rotate(270)
+        elif transformation == 7:
+            newim = newim.mirror()
+            newim = im.rotate(270)
+        elif transformation > 7:
+            print(
+                "transformation is invalid; not doing any transformation is the default"
+            )
+
+        return newim
+
+    def processed_tile(self, image_path, transformation):
         im = Image.open(image_path)
         newim = im
         if transformation == 1:
@@ -189,12 +249,14 @@ class SimpleTiled(SampleBDD):
             newim = newim.mirror()
             newim = im.rotate(270)
         elif transformation > 7:
-            print("transformation is invalid; not doing any transformation is the default")
+            print(
+                "transformation is invalid; not doing any transformation is the default"
+            )
 
         return newim
 
     def get_spec_headers(self):
-        return ["Dimension","TileSet"]
+        return ["Dimension", "TileSet"]
 
     def get_header_value(self, header):
         if header == "Dimension":
@@ -202,4 +264,31 @@ class SimpleTiled(SampleBDD):
         elif header == "TileSet":
             return self.tileset.value
 
+    def spec_string(self):
+        return f"{self.name}-{self.dim}"
 
+    def analytical_expressive_range_analysis(self, expr=None):
+        # we need to iterate over all the possbilites right?
+        # So how many times does i,j cell be tile t
+        # TODO: Figure out how to use the cached counts tree_true_probs
+
+        era_counts = {}
+        # each location in the grid
+        assign_count = {}
+
+        bdd_node = self.bdd_node
+        if expr:
+            bdd_node = self.bdd_node & expr
+
+        for assign_cell in self.context.vars:
+            kop = self.context.vars[assign_cell]
+            assign_cell_count = []
+            for j in range(kop["dom"][1]):
+                assignment = {str(assign_cell): j}
+                rs = self.context.let(assignment, bdd_node)
+                co = rs.count()
+                assign_cell_count.append(co)
+            assign_count[assign_cell] = assign_cell_count
+
+            # print(assign_cell)
+        return assign_count
