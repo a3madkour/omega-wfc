@@ -1,6 +1,9 @@
 from enum import Enum
 import uuid
 from SimpleTiled import SimpleTiled
+import numpy as np
+import seaborn as sb
+import matplotlib.pyplot as plt
 from utils import get_subdirectory
 
 
@@ -161,7 +164,7 @@ class Trial:
                 header_value = self.generator.get_header_value(header)
                 data_str += f",{header_value}"
 
-            data_str += f",{self.time_data["compute_true_probs_time"][i]}"
+            data_str += f",{self.time_data["compute_true_probs_time"][i]}" 
 
             if "marginal" in self.metrics_data:
                 data_str += f",{self.metrics_data["marginal"][i]}"
@@ -252,3 +255,243 @@ class Experiment:
 
     def add_metric_to_all_trials(self, metric):
         self.metrics.append(metric)
+
+def draw_analytical_era_simpletiled(experiment, prob=False):
+    #this is a very subtle difference between this and the sample ERA
+    #THE SAMPLE ERA IS A CONDITIONAL DISTRIBUTION, it forms a markov chain where the first pick you make influences all other picks.
+    #This "analaytical" just counts how many solutions in total have things in that bucket
+    generator = experiment.generator
+    counts = []
+    for i in range(generator.dim):
+        rows = []
+        for j in range(generator.dim):
+            columns = []
+            index = i * generator.dim + j
+            var_name = generator.varnames[(i, j)]
+            for k in range(len(generator.tile_vec)):
+                new_bdd = generator.context.let({var_name: k}, generator.bdd_node)
+                new_bdd_count = new_bdd.count()
+                columns.append(new_bdd_count)
+                if k == 12:
+                    print(f"i: {i}, j:{j}, k:{k}, var_name:{var_name},new_bdd_count: {new_bdd_count}")
+            rows.append(columns)
+        counts.append(rows)
+
+    count_np = np.array(counts)
+    print(count_np.shape)
+    fig, axes = plt.subplots(generator.dim, generator.dim)
+    print(count_np)
+    for i, row in enumerate(axes):
+        for j, ax in enumerate(row):
+            x_labels = [f"{i}" for i in range(len(counts[i][j]))]
+            data = np.array(counts[i][j])
+            if prob:
+                data = data / experiment.num_samples
+
+            heatmap = sb.barplot(x=x_labels, y=data, ax=ax, linewidth=1)
+            heatmap.set_xticks(
+                ticks=[i for i in range(len(counts[i][j]))],
+                labels=x_labels,
+                rotation=0,
+            )
+            heatmap.set(ylim=(1,400))
+
+    fig.set_figheight(15)
+    fig.set_figwidth(15)
+    fig.savefig("wfc_analytical_era.png")
+
+
+def draw_simple_tiled_samples(experiment, metric = None):
+    generator = experiment.generator
+    if not metric:
+        metric = experiment.metrics[0]
+
+    for trial in experiment.trials:
+        for bit_string in trial.metrics_data[metric]:
+            assignment = generator.assignment_from_bit_string(bit_string)
+            index_assignment = generator.index_assignment_from_bit_string(bit_string)
+            tile_num_assign = generator.get_assignment(index_assignment)
+            final_img = generator.draw_simple_tiled(tile_num_assign)
+            final_img.save(f"sample_images/{generator.spec_string()}/{bit_string}.png")
+
+
+def draw_simple_tiled_heat_map(experiment, metric = None, prob=False):
+    generator = experiment.generator
+    if not metric:
+        metric = experiment.metrics[0]
+
+    for trial in experiment.trials:
+        heat_map_arr = []
+        counts = []
+        for i in range(generator.dim):
+            rows = []
+            for j in range(generator.dim):
+                columns = []
+                print(dir(generator.context))
+                for k in range(len(generator.tile_vec)):
+                    columns.append(0)
+                rows.append(columns)
+            counts.append(rows)
+
+        for bit_string in trial.metrics_data[metric]:
+            print(bit_string)
+            assignment = generator.assignment_from_bit_string(bit_string)
+            index_assignment = generator.index_assignment_from_bit_string(bit_string)
+            print(index_assignment)
+            tile_num_assign = generator.get_assignment(index_assignment)
+            print("title: ", tile_num_assign)
+
+            # print(counts)
+            for i, assign in enumerate(tile_num_assign):
+                for j in range(len(assign)):
+                    print(f"assign[j]: {assign[j]}")
+                    counts[i][j][assign[j]] += 1
+
+        count_np = np.array(counts)
+        fig, axes = plt.subplots(generator.dim, generator.dim)
+        for i, row in enumerate(axes):
+            for j, ax in enumerate(row):
+                x_labels = [f"{i}" for i in range(len(counts[i][j]))]
+                data = np.array(counts[i][j])
+                if prob:
+                    data = data / experiment.num_samples
+
+                heatmap = sb.barplot(x=x_labels, y=data, ax=ax, linewidth=1)
+                heatmap.set_xticks(
+                    ticks=[i for i in range(len(counts[i][j]))],
+                    labels=x_labels,
+                    rotation=0,
+                )
+                heatmap.set(ylim=(1,1000))
+
+        # fig.set_ylabel("Count")
+        fig.set_figheight(15)
+        fig.set_figwidth(15)
+        fig.savefig("wfc_era.png")
+
+
+
+def asp_run_test(filename, output_file, ground_time, dim, sample_num):
+    #this is dumb
+    generator = SimpleTiled(dim=2)
+    generator.compile()
+
+    start = time.time()
+    seed = int(random.random() * 10)
+    cmd_str = (
+        "clingo wfc.lp --seed="
+        + str(seed)
+        + " "
+        + filename
+        + "-grounded.lp -n 1 --outf=2 --sign-def=rnd --rand-freq=1"
+    )
+    # cmd_str = (
+    #     f"clingo --seed={seed} platformer-grounded.lp -n 1 --outf=2 --sign-def=rnd --rand-freq=1"
+    # )
+    print(cmd_str)
+    res = json.loads(subprocess.run(cmd_str, shell=True, capture_output=True).stdout)
+    end = time.time()
+    solve_time = res["Time"]["Total"] * 1e9
+    # if solve_time == 0:
+    #     solve_time = (end - start)* 1e+9
+    # print("solve: ",res["Time"]["Solve"] * 1e+9)
+    print((end - start) * 1e9)
+    atoms = res["Call"][-1]["Witnesses"][-1]["Value"]
+    for atom in atoms:
+        if atom.startswith("shape("):
+            shape = eval(atom[len("shape") :])
+
+
+    print(atoms)
+    assignment = {}
+    result_tiles = np.zeros(shape)
+    hash_str = ""
+
+    beep = []
+    for i in range(10):
+        boop = []
+        for j in range(8):
+            boop.append(0)
+        beep.append(boop)
+            
+    for atom in atoms:
+        print(atom)
+        if atom.startswith("assign("):
+            (i, j), v = eval(atom[len("assign") :])
+            result_tiles[i][j] = v
+
+            
+    for boop in beep:
+        for bit in boop:
+            hash_str = f"{hash_str}{bit}"
+
+    print("assignment: ", assignment)
+    # im = generator.draw_simple_tiled_asp(assignment)
+    # image_name = f"asp-imgs/{filename}-{sample_num}.png"
+    # im = ImageOps.mirror(im)
+    # im.save(image_name)
+
+    print(hash_str)
+    output_file.write(
+        "ASP," + filename + "," + str(solve_time) + "," + str(ground_time) + "," + hash_str +"\n"
+    )
+    return result_tiles
+
+
+def draw_asp_tilemap(name="Knots", dim=2,num_samples = 1000):
+    f = open("asp.csv", "a")
+    gen = facts_from_tileset(name, asp_facts_from_tiles, dim)
+    samples = []
+    counts = []
+    for i in range(dim):
+        rows = []
+        for j in range(dim):
+            columns = []
+            for k in range(13):
+                columns.append(0)
+                rows.append(columns)
+        counts.append(rows)
+
+    for k in range(num_samples):
+        start = time.time()
+        res = subprocess.run(
+            f"time gringo wfc.lp {name}.lp > {name}-grounded.lp",
+            shell=True,
+            capture_output=True,
+        )
+        # res = subprocess.run(
+        #     f"time gringo platformer.lp > platformer-grounded.lp",
+        #     shell=True,
+        #     capture_output=True,
+        # )
+
+        end = time.time()
+        ground_time = (end - start) * 1e9
+        sample = np.array(run_test(name, f, ground_time, dim,k))
+
+        for i in range(dim):
+            for j in range(dim):
+                cell_value = sample[i][j]
+                counts[i][j][int(cell_value)] += 1
+
+    count_np = np.array(counts)
+    print(count_np[0][0].sum())
+    fig, axes = plt.subplots(2, 2)
+    for i, row in enumerate(axes):
+        for j, ax in enumerate(row):
+            x_labels = [f"{i}" for i in range(len(counts[i][j]))]
+            data = np.array(counts[i][j])
+            # data = data / experiment.num_samples
+            heatmap = sb.barplot(x=x_labels, y=data, ax=ax, linewidth=1)
+            heatmap.set_xticks(
+                ticks=[i for i in range(len(counts[i][j]))],
+                labels=x_labels,
+                rotation=0,
+            )
+            heatmap.set_ylim(1,400)
+
+            # fig.set_ylabel("Count")
+            fig.set_figheight(15)
+            fig.set_figwidth(15)
+            fig.savefig("asp_tile_set.png")
+

@@ -1,6 +1,12 @@
 import json
 import numpy as np
 from collections import  Counter
+from SimpleTiled import SimpleTiled, TileSet
+import time
+import subprocess
+import random
+
+
 
 def facts_from_tileset(path, tiles2facts, dim):
 

@@ -146,22 +146,26 @@ class SampleBDD:
                 self.support[bdd_node.__hash__()] = 1
             return
 
-        # if bdd_node.high:
-        #     high_boost = 2**(len(bdd_node.support) - len(bdd_node.high.support)-1)
+
+        high_boost = 1
+        low_boost = 1
         
-        # if bdd_node.low:
-        #     low_boost =  2**(len(bdd_node.support) - len(bdd_node.low.support)-1)
+        if bdd_node.high:
+            high_boost = 2**(len(bdd_node.support) - len(bdd_node.high.support)-1)
+        
+        if bdd_node.low:
+            low_boost =  2**(len(bdd_node.support) - len(bdd_node.low.support)-1)
+
 
         if bdd_node.high.__hash__() not in self.cached_counts:
             self.compute_cached_model_counts(bdd_node.high)
         if bdd_node.low.__hash__() not in self.cached_counts:
             self.compute_cached_model_counts(bdd_node.low)
 
-
-        high_count =  self.cached_counts[bdd_node.high.__hash__()]
+        high_count =  self.cached_counts[bdd_node.high.__hash__()] 
         low_count =  self.cached_counts[bdd_node.low.__hash__()]
 
-        n = high_count + low_count
+        n = (high_boost * high_count)  + (low_boost * low_count)
 
         if bdd_node.negated:
             self.cached_counts[bdd_node.__hash__()] = 2**len(bdd_node.support) - n
@@ -222,6 +226,10 @@ class SampleBDD:
         return return_value
 
     def sample(self, weights=None, clear_true_probs=False):
+        if self.bdd == None:
+            assert("Attempting to sample from a BDD that is yet to compile")
+            return
+
         if not weights:
             self.assign_weights()
         else:
@@ -285,7 +293,12 @@ class SampleBDD:
         sample_bit_vec = []
         for bit in sample_bit_map:
             if bit not in sample:
-                sample_bit_vec.append(0)
+                rnd = random.random()
+                #add this little bit of randomness to make sure the variables are set uniformly
+                if rnd > 0.5:
+                    sample_bit_vec.append(0)
+                else:
+                    sample_bit_vec.append(1)
             else:
                 sample_bit_vec.append(sample[bit])
 

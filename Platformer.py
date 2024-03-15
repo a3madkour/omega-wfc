@@ -1,7 +1,8 @@
 from SampleBDD import SampleBDD, SampleFormat
 from omega.symbolic.fol import Context
 from collections import defaultdict
-from functools import cache
+import seaborn as sb
+import pandas as pd
 import time
 
 class Platformer(SampleBDD):
@@ -119,4 +120,37 @@ class Platformer(SampleBDD):
 
             # print(assign_cell)
         return assign_count
+
+
+def draw_analytical_era_reachable_platformer(generator, prob=False):
+    # countable models where a given tile is reachable
+    grid_of_counts = []
+    for i in range(generator.width):
+        solid_counts = []
+        for j in range(generator.height):
+            reach_bdd_node = generator.reachable[(i, j)]
+            actual_node_to_count = reach_bdd_node & generator.bdd_node
+            count = actual_node_to_count.count()
+
+            if prob:
+                count = count / generator.bdd_node.count()
+                if count > 1:
+                    print("how")
+                    print(f"i,j: {i},{j}")
+                    print(
+                        f"count,bdd_count: {generator.reachable[(i,j)].count()},{generator.bdd_node.count()}"
+                    )
+            print(count)
+            solid_counts.append(count)
+            # solid_counts.reverse()
+        grid_of_counts.append(solid_counts)
+
+    df = pd.DataFrame(grid_of_counts).transpose()
+    heatmap = sb.heatmap(df, cmap="crest", linewidth=1, square=True, vmin=0, vmax=1)
+    heatmap.set(xticklabels=[])
+    heatmap.set(yticklabels=[])
+    heatmap.tick_params(bottom=False, left=False)
+    fig = heatmap.get_figure()
+    fig.savefig("reachable_analytical_prob.png")
+    fig.clf()
 
