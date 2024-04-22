@@ -5,6 +5,11 @@ import numpy as np
 import seaborn as sb
 import matplotlib.pyplot as plt
 from utils import get_subdirectory
+from ASP import facts_from_tileset,asp_facts_from_tiles
+import time
+import subprocess
+import random
+import json
 
 
 # figure out how to compute kl-divergence and jenson on samples
@@ -441,16 +446,17 @@ def asp_run_test(filename, output_file, ground_time, dim, sample_num):
 def draw_asp_tilemap(name="Knots", dim=2,num_samples = 1000):
     f = open("asp.csv", "a")
     gen = facts_from_tileset(name, asp_facts_from_tiles, dim)
+    # print(gen)
     samples = []
     counts = []
-    for i in range(dim):
-        rows = []
-        for j in range(dim):
-            columns = []
-            for k in range(13):
-                columns.append(0)
-                rows.append(columns)
-        counts.append(rows)
+    # for i in range(dim):
+    #     rows = []
+    #     for j in range(dim):
+    #         columns = []
+    #         for k in range(13):
+    #             columns.append(0)
+    #             rows.append(columns)
+    #     counts.append(rows)
 
     for k in range(num_samples):
         start = time.time()
@@ -459,39 +465,39 @@ def draw_asp_tilemap(name="Knots", dim=2,num_samples = 1000):
             shell=True,
             capture_output=True,
         )
-        # res = subprocess.run(
-        #     f"time gringo platformer.lp > platformer-grounded.lp",
-        #     shell=True,
+    #     # res = subprocess.run(
+    #     #     f"time gringo platformer.lp > platformer-grounded.lp",
+    #     #     shell=True,
         #     capture_output=True,
         # )
 
-        end = time.time()
-        ground_time = (end - start) * 1e9
-        sample = np.array(run_test(name, f, ground_time, dim,k))
+    #     end = time.time()
+    #     ground_time = (end - start) * 1e9
+    #     sample = np.array(asp_run_test(name, f, ground_time, dim,k))
 
-        for i in range(dim):
-            for j in range(dim):
-                cell_value = sample[i][j]
-                counts[i][j][int(cell_value)] += 1
+    #     for i in range(dim):
+    #         for j in range(dim):
+    #             cell_value = sample[i][j]
+    #             counts[i][j][int(cell_value)] += 1
 
-    count_np = np.array(counts)
-    print(count_np[0][0].sum())
-    fig, axes = plt.subplots(2, 2)
-    for i, row in enumerate(axes):
-        for j, ax in enumerate(row):
-            x_labels = [f"{i}" for i in range(len(counts[i][j]))]
-            data = np.array(counts[i][j])
-            # data = data / experiment.num_samples
-            heatmap = sb.barplot(x=x_labels, y=data, ax=ax, linewidth=1)
-            heatmap.set_xticks(
-                ticks=[i for i in range(len(counts[i][j]))],
-                labels=x_labels,
-                rotation=0,
-            )
-            heatmap.set_ylim(1,400)
+    # count_np = np.array(counts)
+    # print(count_np[0][0].sum())
+    # fig, axes = plt.subplots(2, 2)
+    # for i, row in enumerate(axes):
+    #     for j, ax in enumerate(row):
+    #         x_labels = [f"{i}" for i in range(len(counts[i][j]))]
+    #         data = np.array(counts[i][j])
+    #         # data = data / experiment.num_samples
+    #         heatmap = sb.barplot(x=x_labels, y=data, ax=ax, linewidth=1)
+    #         heatmap.set_xticks(
+    #             ticks=[i for i in range(len(counts[i][j]))],
+    #             labels=x_labels,
+    #             rotation=0,
+    #         )
+    #         heatmap.set_ylim(1,400)
 
-            # fig.set_ylabel("Count")
-            fig.set_figheight(15)
-            fig.set_figwidth(15)
-            fig.savefig("asp_tile_set.png")
+    #         # fig.set_ylabel("Count")
+    #         fig.set_figheight(15)
+    #         fig.set_figwidth(15)
+    #         fig.savefig("asp_tile_set.png")
 
