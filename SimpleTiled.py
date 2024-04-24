@@ -1,4 +1,4 @@
-from PIL import Image
+from PIL import Image, ImageOps
 from omega.symbolic.fol import Context
 import time
 from enum import Enum

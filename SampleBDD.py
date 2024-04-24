@@ -12,6 +12,9 @@ from enum import Enum
 
 
 class SampleFormat(Enum):
+    """
+    Enum for what format the Sample is given in; the value of tile index (Value), or its bit string (Bit).
+      """
     Value = 1
     Bit = 2
 
@@ -20,7 +23,11 @@ class SampleFormat(Enum):
 # Also might just be a wrapper class with more functionality over omega's BDD
 class SampleBDD:
     def __init__(self, bdd_node=None, filename=None):
-        "docstring"
+        """Constructor for the Omega BDD wrapper
+
+        :param bdd_node: The Omega BDD node being wrapped
+        :param filename: Optional filename of a saved Omega BDD
+        """
         self.weights = {}
         self.tree_true_probs = {}
         self.cached_counts = {}

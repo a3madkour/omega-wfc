@@ -19,6 +19,9 @@ import json
 
 
 class Metric:
+    """
+      Class representing a metric on generated output
+      """
     def __init__(self, metric_func, metric_name):
         self.metric_name = metric_name
         self.metric_func = metric_func
@@ -32,19 +35,32 @@ class Metric:
     def __call__(self, *args):
         return self.metric_func(*args)
 
-    def hamming_distance(bit_string_1, bit_string_2):
-        # TODO: add proper distance
-        return "this is wrong"
+    # def hamming_distance(bit_string_1, bit_string_2):
+    #     # TODO: add proper distance
+    #     pass
+    #     # return "this is wrong"
 
-    def hamming_distance_metric(generator, bit_string):
-        return Metric(
-            lambda x: Metric.hamming_distance(x, bit_string), f"Hamming-{bit_string}"
-        )
+    # def hamming_distance_metric(generator, bit_string):
+    #     return Metric(
+    #         lambda x: Metric.hamming_distance(x, bit_string), f"Hamming-{bit_string}"
+    #     )
 
     def bit_string_metric(generator):
+        """Returning the bit string representation of the artifact
+
+        :param generator: The wrapper BDD used to generate the artifact
+        :returns: Metric object with the bit string metric
+
+        """
         return Metric(lambda x: generator.sample_as_bit_string(x), "BitString")
 
     def hash_metric(generator):
+        """Returning the hash representation of the artifact based on its "assignment" in the wrapper class
+
+        :param generator: The wrapper BDD used to generate the artifact
+        :returns: Metric object with the hash metric
+
+        """
         return Metric(lambda x: generator.sample_as_assignment_string(x), "Hash")
 
 
@@ -122,7 +138,7 @@ class Trial:
         # time_data = compile time, sample time, learning time, generating training set time
         # self.time_data = {}
 
-        print(self.metrics_data)
+        # print(self.metrics_data)
         filename = f"{path}/trial-{self.trial_id}.csv"
 
         f = open(filename, "a")
@@ -283,9 +299,9 @@ def draw_analytical_era_simpletiled(experiment, prob=False):
         counts.append(rows)
 
     count_np = np.array(counts)
-    print(count_np.shape)
+    # print(count_np.shape)
     fig, axes = plt.subplots(generator.dim, generator.dim)
-    print(count_np)
+    # print(count_np)
     for i, row in enumerate(axes):
         for j, ax in enumerate(row):
             x_labels = [f"{i}" for i in range(len(counts[i][j]))]
@@ -378,7 +394,7 @@ def draw_simple_tiled_heat_map(experiment, metric = None, prob=False):
 
 def asp_run_test(filename, output_file, ground_time, dim, sample_num):
     #this is dumb
-    generator = SimpleTiled(dim=2)
+    generator = SimpleTiled(dim=dim)
     generator.compile()
 
     start = time.time()
@@ -393,21 +409,23 @@ def asp_run_test(filename, output_file, ground_time, dim, sample_num):
     # cmd_str = (
     #     f"clingo --seed={seed} platformer-grounded.lp -n 1 --outf=2 --sign-def=rnd --rand-freq=1"
     # )
-    print(cmd_str)
+    # print(cmd_str)
     res = json.loads(subprocess.run(cmd_str, shell=True, capture_output=True).stdout)
     end = time.time()
     solve_time = res["Time"]["Total"] * 1e9
     # if solve_time == 0:
     #     solve_time = (end - start)* 1e+9
     # print("solve: ",res["Time"]["Solve"] * 1e+9)
-    print((end - start) * 1e9)
+    # print((end - start) * 1e9)
+    # print(res)
     atoms = res["Call"][-1]["Witnesses"][-1]["Value"]
+    # print(atoms)
     for atom in atoms:
         if atom.startswith("shape("):
             shape = eval(atom[len("shape") :])
 
 
-    print(atoms)
+    # print(atoms)
     assignment = {}
     result_tiles = np.zeros(shape)
     hash_str = ""
@@ -420,10 +438,11 @@ def asp_run_test(filename, output_file, ground_time, dim, sample_num):
         beep.append(boop)
             
     for atom in atoms:
-        print(atom)
+        # print(atom)
         if atom.startswith("assign("):
             (i, j), v = eval(atom[len("assign") :])
             result_tiles[i][j] = v
+            assignment[i*dim + j] = v 
 
             
     for boop in beep:
@@ -431,22 +450,21 @@ def asp_run_test(filename, output_file, ground_time, dim, sample_num):
             hash_str = f"{hash_str}{bit}"
 
     print("assignment: ", assignment)
-    # im = generator.draw_simple_tiled_asp(assignment)
-    # image_name = f"asp-imgs/{filename}-{sample_num}.png"
+    im = generator.draw_simple_tiled_asp(assignment)
+    image_name = f"asp-imgs/{filename}-{sample_num}.png"
     # im = ImageOps.mirror(im)
-    # im.save(image_name)
+    im.save(image_name)
 
-    print(hash_str)
-    output_file.write(
-        "ASP," + filename + "," + str(solve_time) + "," + str(ground_time) + "," + hash_str +"\n"
-    )
+    # print(hash_str)
+    # output_file.write(
+    #     "ASP," + filename + "," + str(solve_time) + "," + str(ground_time) + "," + hash_str +"\n"
+    # )
     return result_tiles
 
 
 def draw_asp_tilemap(name="Knots", dim=2,num_samples = 1000):
     f = open("asp.csv", "a")
     gen = facts_from_tileset(name, asp_facts_from_tiles, dim)
-    # print(gen)
     samples = []
     counts = []
     # for i in range(dim):
@@ -461,20 +479,22 @@ def draw_asp_tilemap(name="Knots", dim=2,num_samples = 1000):
     for k in range(num_samples):
         start = time.time()
         res = subprocess.run(
-            f"time gringo wfc.lp {name}.lp > {name}-grounded.lp",
+            f"gringo wfc.lp {name}.lp > {name}-grounded.lp",
             shell=True,
             capture_output=True,
         )
-    #     # res = subprocess.run(
-    #     #     f"time gringo platformer.lp > platformer-grounded.lp",
-    #     #     shell=True,
+        # print("res: ", res)
+        # res = subprocess.run(
+        #     f"time gringo platformer.lp > platformer-grounded.lp",
+        #     shell=True,
         #     capture_output=True,
         # )
 
-    #     end = time.time()
-    #     ground_time = (end - start) * 1e9
-    #     sample = np.array(asp_run_test(name, f, ground_time, dim,k))
+        end = time.time()
+        ground_time = (end - start) * 1e9
+        sample = np.array(asp_run_test(name, f, ground_time, dim,k))
 
+        print("sample: " , sample)
     #     for i in range(dim):
     #         for j in range(dim):
     #             cell_value = sample[i][j]

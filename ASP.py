@@ -1,15 +1,16 @@
 import json
 import numpy as np
-from collections import  Counter
-from SimpleTiled import SimpleTiled, TileSet
-import time
-import subprocess
-import random
-
-
 
 def facts_from_tileset(path, tiles2facts, dim):
 
+    """Generate facts from tileset json file at *path* using the *tiles2facts* function and writes them to a file 
+
+    :param path: Path of the JSON file for the tileset
+    :param tiles2facts: Function used to convert tileset to facts
+    :param dim: Dimension of the grid
+    :returns: 
+
+    """
     file = open(f"tileset-json/{path}-patterns.json")
     data = json.load(file)
     tile_vec = data["tile_vec"]
@@ -17,22 +18,22 @@ def facts_from_tileset(path, tiles2facts, dim):
     v_adj = data["patterns"]["y_axis"]
 
     
-
-    # filepath = "mxgmn-wfc/samples/"+filename+".png"
-    # img = imread(filepath)#.transpose((1,0,2))
-    # dim= img.shape[2]
-    # tile_hashes = img @ (256**np.arange(dim))
-    # unique_hashes = np.unique(tile_hashes)
-    # tiles = np.searchsorted(unique_hashes, tile_hashes)
-    # print(tiles)
     with open( path+ '.lp', 'w') as f:
         for fact in tiles2facts(h_adj,v_adj,tile_vec,dim):
             f.write(fact + '\n')
 
-    # return unique_hashes,tiles
 
 def asp_facts_from_tiles(h_adj,v_adj,tile_vec,dim):
 
+    """Convert tile adjacency patterns into ASP facts
+
+    :param h_adj: List of horizontal patterns
+    :param v_adj: List of vertical patterns
+    :param tile_vec: Dictionary of tile information
+    :param dim: Dimension of the grid
+    :returns: List of ASP facts from the given patterns
+
+    """
     facts = []
 
     for entry in tile_vec:
@@ -70,7 +71,6 @@ def asp_facts_from_tiles(h_adj,v_adj,tile_vec,dim):
                             repr(c1).replace(' ','')+','+\
                             repr(c2).replace(' ','')+',1000).')
 
-    print(facts)
 
     return facts
 
