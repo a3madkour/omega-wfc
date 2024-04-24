@@ -329,7 +329,6 @@ def draw_simple_tiled_samples(experiment, metric = None):
 
     for trial in experiment.trials:
         for bit_string in trial.metrics_data[metric]:
-            assignment = generator.assignment_from_bit_string(bit_string)
             index_assignment = generator.index_assignment_from_bit_string(bit_string)
             tile_num_assign = generator.get_assignment(index_assignment)
             final_img = generator.draw_simple_tiled(tile_num_assign)
@@ -355,12 +354,8 @@ def draw_simple_tiled_heat_map(experiment, metric = None, prob=False):
             counts.append(rows)
 
         for bit_string in trial.metrics_data[metric]:
-            print(bit_string)
-            assignment = generator.assignment_from_bit_string(bit_string)
             index_assignment = generator.index_assignment_from_bit_string(bit_string)
-            print(index_assignment)
             tile_num_assign = generator.get_assignment(index_assignment)
-            print("title: ", tile_num_assign)
 
             # print(counts)
             for i, assign in enumerate(tile_num_assign):

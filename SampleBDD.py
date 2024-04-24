@@ -48,6 +48,13 @@ class SampleBDD:
         #     sys.exit("No filename or bdd_node passed to SampleBDD")
 
     def gen_n_models(self, n, check_sat=False):
+        """ Generate sequentially *n* number of models from the BDD.
+
+        :param n: Number of models to generate
+        :param check_sat: Check SAT for each model (For debugging purposes)
+        :returns: (Actual number of models given, the first n models in the BDD)
+
+        """
         models = []
         it = self.bdd.pick_iter(self.bdd_node)
         total_number_of_models = int(self.bdd.count(self.bdd_node))
@@ -70,6 +77,14 @@ class SampleBDD:
         return (actual_number_of_models, models)
 
     def save_models(filename, models, append=False):
+        """ Write *models* to *filename*
+
+        :param filename: File to which to write the models
+        :param models: The models to write
+        :param append: Whether or not to append or just rewrite the file 
+        :returns: 
+
+        """
         if append:
             f = open(f"{filename}", "a")
         else:
@@ -80,6 +95,12 @@ class SampleBDD:
         f.close()
 
     def assign_weights(self, weight=0.5):
+        """Assign a single initial weight to each var in the BDD
+
+        :param weight: The initial weight of each var in the BDD (0.5 by default) 
+        :returns: 
+
+        """
         for var in self.bdd.vars:
             self.weights[var] = (1.0 - weight, weight)
 
@@ -315,15 +336,24 @@ class SampleBDD:
         self,
         filename,
     ):
-        # do the dump thing and dumb thing and output it as json and then read it back
-        # Not the best but time is a factor
+        """Save BDD to an external file using Omega's JSON dump functionality
 
+        :param filename: File to which to save the BDD
+        :returns: 
+
+        """
         self.bdd.dump(filename, [self.bdd_node])
         out_file = open("wrapper-info-" + filename, "w")
         wrapper_info = {"weights": self.weights}
         json.dump(wrapper_info, out_file, indent=6)
 
     def load_bdd(self, filename):
+        """Load a dumped BDD from *filename*
+
+        :param filename: File from which the BDD is loaded
+        :returns: 
+
+        """
         bdd = cudd.BDD()
         roots = bdd.load(filename)
         wrapper_file = open(f"wrapper-info-{filename}", "r")
@@ -332,100 +362,104 @@ class SampleBDD:
         self.bdd_node = roots[0]
         self.weights = json_data["weights"]
 
-    def bin_assignment(self, delta, distance):
-        # TODO
-        pass
-
-    def assignment_from_bit_string(self, bit_string):
-        assignment = {}
-        for i, bit in enumerate(bit_string):
-            label = self.bdd.var_at_level(i)
-            assignment[label] = bit
-
-        return assignment
+    # def bin_assignment(self, delta, distance):
+    #     # TODO
+    #     pass
 
     def index_assignment_from_bit_string(self, bit_string):
+        """Return a dictionary indicating the value of each bit at a given index
+
+        :param bit_string: The bit string of a model of the BDD
+        :returns: Dictionary indicating the value of each bit at a given index
+
+        """
         assignment = {}
         for i, bit in enumerate(bit_string):
-            label = self.bdd.var_at_level(i)
             assignment[i] = bit
 
         return assignment
 
     # ASSUMEs get_assignement is implemented, if I could be bothered I will add it to an interface
-    def gen_sample_training_set(
-        self,
-        dirname,
-        num_samples=10,
-        sample_format=SampleFormat.Bit,
-    ):
-        dir_path = get_subdirectory(dirname)
-        assignments = []
-        for i in range(num_samples):
-            (_, _, sample, _) = self.sample()
-            assignment = self.get_assignment(sample)
-            assignments.append(assignment)
+    # Not used in the code so commented out for now
+    # def gen_sample_training_set(
+    #     self,
+    #     dirname,
+    #     num_samples=10,
+    #     sample_format=SampleFormat.Bit,
+    # ):
+    #     dir_path = get_subdirectory(dirname)
+    #     assignments = []
+    #     for i in range(num_samples):
+    #         (_, _, sample, _) = self.sample()
+    #         assignment = self.get_assignment(sample)
+    #         assignments.append(assignment)
 
-        # pickling for now
-        # format size-num_samples-runID
-        pickle_file = open(f"{dir_path}/{num_samples}-{uuid.uuid4()}.pkl", "wb")
-        pickle.dump(assignments, pickle_file)
-        pickle_file.close()
+    #     # pickling for now
+    #     # format size-num_samples-runID
+    #     pickle_file = open(f"{dir_path}/{num_samples}-{uuid.uuid4()}.pkl", "wb")
+    #     pickle.dump(assignments, pickle_file)
+    #     pickle_file.close()
 
-    def load_sample_assignments_set(self, assign_pickle_file):
-        pickle_file = open(assign_pickle_file, "rb")
-        assignments = pickle.load(pickle_file)
-        pickle_file.close()
-        return assignments
+    # def load_sample_assignments_set(self, assign_pickle_file):
+    #     pickle_file = open(assign_pickle_file, "rb")
+    #     assignments = pickle.load(pickle_file)
+    #     pickle_file.close()
+    #     return assignments
 
-    def train_with_n_runs(self, path):
-        runs = get_all_elements_in_dir(get_subdirectory(path), lambda x: "pkl" in x)
-        counts = {}
-        big_count = 0
-        for run in runs:
-            assignments = self.load_assignments_set(f"{path}/{run}")
-            run_counts = self.train_with_one_run(assignments, False)
-            small_count = len(assignments)
-            big_count += small_count
+    # def train_with_n_runs(self, path):
+    #     runs = get_all_elements_in_dir(get_subdirectory(path), lambda x: "pkl" in x)
+    #     counts = {}
+    #     big_count = 0
+    #     for run in runs:
+    #         assignments = self.load_assignments_set(f"{path}/{run}")
+    #         run_counts = self.train_with_one_run(assignments, False)
+    #         small_count = len(assignments)
+    #         big_count += small_count
 
-            if len(counts) < 1:
-                counts = run_counts
-            else:
-                for el in counts:
-                    counts[el] += run_counts[el]
+    #         if len(counts) < 1:
+    #             counts = run_counts
+    #         else:
+    #             for el in counts:
+    #                 counts[el] += run_counts[el]
 
-        for bit in counts:
-            high = counts[bit] / big_count
-            low = 1.0 - high
-            self.weights[self.bdd.var_at_level(bit)] = (low, high)
+    #     for bit in counts:
+    #         high = counts[bit] / big_count
+    #         low = 1.0 - high
+    #         self.weights[self.bdd.var_at_level(bit)] = (low, high)
 
-            return counts
+    #         return counts
 
-    def train_with_one_run(self, assignments, update_weights=True):
-        counts = {}
-        for i in range(len(self.weights)):
-            counts[i] = 0
+    # def train_with_one_run(self, assignments, update_weights=True):
+    #     counts = {}
+    #     for i in range(len(self.weights)):
+    #         counts[i] = 0
 
-        for assignment in assignments:
-            # print(type(assignment))
-            # print(assignment)
-            for i, bit in enumerate(assignment):
-                # print("bit", bit)
-                # print(i)
-                if int(assignment[bit]) == 1:
-                    counts[i] = counts[i] + 1
+    #     for assignment in assignments:
+    #         # print(type(assignment))
+    #         # print(assignment)
+    #         for i, bit in enumerate(assignment):
+    #             # print("bit", bit)
+    #             # print(i)
+    #             if int(assignment[bit]) == 1:
+    #                 counts[i] = counts[i] + 1
 
-        if update_weights:
-            for bit in counts:
-                high = counts[bit] / len(assignments)
-                low = 1.0 - high
-                self.weights[self.bdd.var_at_level(bit)] = (low, high)
+    #     if update_weights:
+    #         for bit in counts:
+    #             high = counts[bit] / len(assignments)
+    #             low = 1.0 - high
+    #             self.weights[self.bdd.var_at_level(bit)] = (low, high)
 
-        # print(self.weights)
-        # print(counts)
-        return counts
+    #     # print(self.weights)
+    #     # print(counts)
+    #     return counts
 
     def sat_omega_model(self, model):
+        """Check if a model is SAT with the wrapped BDD
+
+        :param model: A possibly invalid model 
+        :returns: Boolean indicating whether that model holds in the wrapped BDD
+
+        """
         # this is a cool way of doing it but yo look at what is below
         # cond_bdd = self.bdd.assign_from(model)
         cond_bdd = self.bdd.let(model, self.bdd_node)
@@ -433,13 +467,29 @@ class SampleBDD:
         return self.bdd.true == cond_bdd
 
     def sat_sample(self, sample):
+        """Check if a sample is SAT with the wrapped BDD
+
+        :param model: A possibly invalid sample 
+        :returns: Boolean indicating whether that model holds in the wrapped BDD
+
+        """
         bdd_assignment = {self.bdd.var_at_level(k): v for k, v in sample.items()}
 
         return self.sat_omega_model(bdd_assignment)
 
     def get_spec_headers(self):
+        """Get the headers for output csv columns, which is needed by the Experiment and Trial classes
+
+        :returns: 
+
+        """
         return []
 
     def get_header_value(self, header):
+        """Get the header value for output csv column header 
+
+        :returns: 
+
+        """
         pass
 
