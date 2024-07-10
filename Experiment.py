@@ -83,11 +83,14 @@ class Trial:
         # time_data = compile time, sample time, learning time, generating training set time
         self.trial_id = uuid.uuid4()
         self.time_data = {}
+        self.samples = []
 
     def add_metric(self, metric):
         self.metrics.append(metric)
 
     def run(self):
+
+        self.samples.clear()
         if self.recompile_per_trial or not self.generator.is_compiled:
             compile_time = self.generator.compile()
             print("Compiling")
@@ -112,6 +115,7 @@ class Trial:
                 final_sample,
                 sample_marginal
             ) = self.generator.sample(clear_true_probs=self.clear_true_probs)
+            self.samples.append(final_sample)
 
             self.time_data["compute_true_probs_time"].append(compute_true_probs_time)
             self.time_data["sample_time"].append(sample_time)
@@ -248,7 +252,6 @@ class Experiment:
         if not num_samples:
             num_samples = self.num_samples
 
-
         if len(metrics) > 0:
             self.metrics = metrics
 
@@ -328,11 +331,11 @@ def draw_simple_tiled_samples(experiment, metric = None):
         metric = experiment.metrics[0]
 
     for trial in experiment.trials:
-        for bit_string in trial.metrics_data[metric]:
-            index_assignment = generator.index_assignment_from_bit_string(bit_string)
-            tile_num_assign = generator.get_assignment(index_assignment)
-            final_img = generator.draw_simple_tiled(tile_num_assign)
-            final_img.save(f"sample_images/{generator.spec_string()}/{bit_string}.png")
+        for i,sample in enumerate(experiment.samples):
+            bmp = generator.sample_as_bit_map(sample)
+            assignment = generator.get_assignment(bmp)
+            final_img = generator.draw_simple_tiled(assignment)
+            final_img.save(f"sample_images/{generator.spec_string()}-{i}.png")
 
 
 def draw_simple_tiled_heat_map(experiment, metric = None, prob=False):
@@ -360,7 +363,7 @@ def draw_simple_tiled_heat_map(experiment, metric = None, prob=False):
             # print(counts)
             for i, assign in enumerate(tile_num_assign):
                 for j in range(len(assign)):
-                    print(f"assign[j]: {assign[j]}")
+                    # print(f"assign[j]: {assign[j]}")
                     counts[i][j][assign[j]] += 1
 
         count_np = np.array(counts)
@@ -444,7 +447,7 @@ def asp_run_test(filename, output_file, ground_time, dim, sample_num):
         for bit in boop:
             hash_str = f"{hash_str}{bit}"
 
-    print("assignment: ", assignment)
+    # print("assignment: ", assignment)
     im = generator.draw_simple_tiled_asp(assignment)
     image_name = f"asp-imgs/{filename}-{sample_num}.png"
     # im = ImageOps.mirror(im)

@@ -1,6 +1,7 @@
 from PIL import Image, ImageOps
 from omega.symbolic.fol import Context
 import time
+import numpy as np
 from enum import Enum
 import sys
 import json
@@ -11,6 +12,10 @@ from SampleBDD import SampleBDD, SampleFormat
 
 class TileSet(Enum):
     Knots = "Knots"
+    Castle = "Castle"
+    Circles = "Circles"
+    FloorPlan = "FloorPlan"
+    Rooms = "Rooms"
     Circuit = "Circuit"
 
 
@@ -140,6 +145,7 @@ class SimpleTiled(SampleBDD):
         return final_assignment
 
     def draw_simple_tiled_asp(self, sample_assignment):
+        # print("sample_assignment: ", sample_assignment)
         # this assumes an order which it should not
         final_image_height = self.dim * self.tile_size[0]
         final_image_width = self.dim * self.tile_size[1]
@@ -148,12 +154,13 @@ class SimpleTiled(SampleBDD):
         self.tile_vec.sort(key=lambda x: x["index"])
 
         new_images = []
+
         for row in sample_assignment:
             # for el in row:
                 # TODO: this is not the index you are looking for
                 # el is the index of the tile type not the bit value?
                 # tile_info = self.tile_vec[el]
-            print("row: ", row)
+            # print("row: ", row)
             tile_info = self.tile_vec[sample_assignment[row]]
             image_path = tile_info["image_path"]
             transform = tile_info["transformation"]
@@ -179,16 +186,21 @@ class SimpleTiled(SampleBDD):
 
         self.tile_vec.sort(key=lambda x: x["index"])
 
+
+
+        # sample_assignment = np.transpose(sample_assignment)
         new_images = []
         for row in sample_assignment:
-            # for el in row:
+            for el in row:
                 # TODO: this is not the index you are looking for
                 # el is the index of the tile type not the bit value?
-                # tile_info = self.tile_vec[el]
-                tile_info = self.tile_vec[row]
+                tile_info = self.tile_vec[el] 
+                # print(el)
+                # print(row)
+                # tile_info = self.tile_vec[row]
                 image_path = tile_info["image_path"]
                 transform = tile_info["transformation"]
-                new_images.append(self.processed_tile_asp(image_path, transform))
+                new_images.append(self.processed_tile(image_path, transform))
 
         outer_index = 0
         for i in range(0, self.dim):

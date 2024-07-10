@@ -2,6 +2,7 @@ import sys
 import json
 import time
 import dd.cudd as cudd
+import numpy as np
 import hashlib
 import uuid
 import random
@@ -106,14 +107,14 @@ class SampleBDD:
 
     def compute_count_probs(self, bdd_node):
         if bdd_node == self.bdd.true:
-            self.tree_true_probs[bdd_node.__hash__()] = 1.0
+            self.tree_true_probs[bdd_node.__hash__()] = np.log(1.0)
             return 1.0
         elif bdd_node == self.bdd.false:
-            self.tree_true_probs[bdd_node.__hash__()] = 0.0
+            self.tree_true_probs[bdd_node.__hash__()] = np.log(0.0)
             return 0.0
 
-        low = self.cached_counts[bdd_node.low.__hash__()] / self.cached_counts[bdd_node.__hash__()]
-        high = self.cached_counts[bdd_node.high.__hash__()] / self.cached_counts[bdd_node.__hash__()]
+        low = np.log(self.cached_counts[bdd_node.low.__hash__()] / self.cached_counts[bdd_node.__hash__()])
+        high = np.log(self.cached_counts[bdd_node.high.__hash__()] / self.cached_counts[bdd_node.__hash__()])
 
         if bdd_node.low.__hash__() not in self.tree_true_probs:
             self.compute_weight_probs(bdd_node.low)
@@ -125,7 +126,8 @@ class SampleBDD:
 
         high_tree_prob = self.tree_true_probs[bdd_node.high.__hash__()]
 
-        prob_tree = (low_tree_prob * low) + (high_tree_prob * high)
+        prob_tree = np.exp(low_tree_prob + low) + np.exp(high_tree_prob + high)
+        prob_tree = np.log(prob_tree)
 
         self.tree_true_probs[bdd_node.__hash__()] = prob_tree
 
@@ -157,6 +159,8 @@ class SampleBDD:
         return prob_tree
 
     def compute_cached_model_counts(self, bdd_node):
+        # if bdd_node.__hash__() in self.cached_counts:
+        #     return
         if bdd_node == self.bdd.true:
             self.cached_counts[bdd_node.__hash__()] = 1.0
             self.support[bdd_node.__hash__()] = len(bdd_node.support)
@@ -212,8 +216,8 @@ class SampleBDD:
 
         n = random.random()
 
-        prob_high = self.tree_true_probs[bdd_node.high.__hash__()]
-        prob_low = self.tree_true_probs[bdd_node.low.__hash__()]
+        prob_high = np.exp(self.tree_true_probs[bdd_node.high.__hash__()])
+        prob_low = np.exp(self.tree_true_probs[bdd_node.low.__hash__()])
 
         rev_prob_high = 1.0 - prob_high
         rev_prob_low = 1.0 - prob_low
@@ -274,19 +278,24 @@ class SampleBDD:
 
         start = time.monotonic_ns()
         self.compute_cached_model_counts(self.bdd_node)
+        print("done with cached counts")
+        end = time.monotonic_ns()
+        compute_cached_model_time = end - start
+        print(f"Done: compute_cached_model_counts {compute_cached_model_time / 1e09}s")
+        start = time.monotonic_ns()
         self.compute_count_probs(self.bdd_node)
         end = time.monotonic_ns()
         compute_true_probs_time = end - start
         print(f"Done: compute_probs {compute_true_probs_time / 1e09}s")
 
-        print("Sampling")
+        # print("Sampling")
         start = time.monotonic_ns()
         final_sample = {}
         sample_marginal = self.sample_bdd(self.bdd_node, True, final_sample)
         end = time.monotonic_ns()
         sample_time = end - start
-        print(f"Done: Sampling {sample_time / 1e09}s")
-        print(final_sample)
+        # print(f"Done: Sampling {sample_time / 1e09}s")
+        # print(final_sample)
         return (compute_true_probs_time, sample_time, final_sample, sample_marginal)
 
     def sample_as_bit_map(self, sample):
