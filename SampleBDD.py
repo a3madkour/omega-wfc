@@ -35,6 +35,7 @@ class SampleBDD:
         self.support = {}
         self.bdd_node = None
         self.bdd = None
+        self.hash_to_var = {}
         self.context = None
         self.dim = None
 
@@ -106,15 +107,17 @@ class SampleBDD:
             self.weights[var] = (1.0 - weight, weight)
 
     def compute_count_probs(self, bdd_node):
+        if bdd_node.__hash__() not in self.hash_to_var:
+            self.hash_to_var[bdd_node.__hash__()] = bdd_node.var
         if bdd_node == self.bdd.true:
-            self.tree_true_probs[bdd_node.__hash__()] = np.log(1.0)
+            self.tree_true_probs[bdd_node.__hash__()] = 1.0
             return 1.0
         elif bdd_node == self.bdd.false:
-            self.tree_true_probs[bdd_node.__hash__()] = np.log(0.0)
+            self.tree_true_probs[bdd_node.__hash__()] = 0.0
             return 0.0
 
-        low = np.log(self.cached_counts[bdd_node.low.__hash__()] / self.cached_counts[bdd_node.__hash__()])
-        high = np.log(self.cached_counts[bdd_node.high.__hash__()] / self.cached_counts[bdd_node.__hash__()])
+        low = self.cached_counts[bdd_node.low.__hash__()] / self.cached_counts[bdd_node.__hash__()]
+        high = self.cached_counts[bdd_node.high.__hash__()] / self.cached_counts[bdd_node.__hash__()]
 
         if bdd_node.low.__hash__() not in self.tree_true_probs:
             self.compute_weight_probs(bdd_node.low)
@@ -126,14 +129,15 @@ class SampleBDD:
 
         high_tree_prob = self.tree_true_probs[bdd_node.high.__hash__()]
 
-        prob_tree = np.exp(low_tree_prob + low) + np.exp(high_tree_prob + high)
-        prob_tree = np.log(prob_tree)
+        prob_tree = (low_tree_prob * low) + (high_tree_prob * high)
 
         self.tree_true_probs[bdd_node.__hash__()] = prob_tree
 
         return prob_tree
 
     def compute_weight_probs(self, bdd_node):
+        if bdd_node.__hash__() not in self.hash_to_var:
+            self.hash_to_var[bdd_node.__hash__()] = bdd_node.var
         if bdd_node == self.bdd.true:
             self.tree_true_probs[bdd_node.__hash__()] = 1.0
             return 1.0
@@ -154,6 +158,7 @@ class SampleBDD:
 
         prob_tree = (low_tree_prob * low) + (high_tree_prob * high)
 
+        # print(f"setting : {self.hash_to_var[bdd_node.__hash__()]}")
         self.tree_true_probs[bdd_node.__hash__()] = prob_tree
 
         return prob_tree
@@ -209,6 +214,7 @@ class SampleBDD:
         if bdd_node == self.bdd.true:
             return 1.0
         elif bdd_node == self.bdd.false:
+            print("we have reached false")
             return 0.0
 
         if bdd_node.negated:
@@ -216,8 +222,13 @@ class SampleBDD:
 
         n = random.random()
 
-        prob_high = np.exp(self.tree_true_probs[bdd_node.high.__hash__()])
-        prob_low = np.exp(self.tree_true_probs[bdd_node.low.__hash__()])
+        #TODO: should multiply weights here
+        prob_high = self.tree_true_probs[bdd_node.high.__hash__()]
+        prob_low = self.tree_true_probs[bdd_node.low.__hash__()]
+        if self.weights:
+            (low,high) = self.weights[bdd_node.var]
+            prob_high *= high
+            prob_low *= low
 
         rev_prob_high = 1.0 - prob_high
         rev_prob_low = 1.0 - prob_low
@@ -257,15 +268,13 @@ class SampleBDD:
             return_value = (return_value << 1) + int(bit)
         return return_value
 
-    def sample(self, weights=None, clear_true_probs=False):
+    def sample(self, clear_true_probs=False, useWeights=False):
         if self.bdd == None:
             assert("Attempting to sample from a BDD that is yet to compile")
             return
 
-        if not weights:
+        if not self.weights:
             self.assign_weights()
-        else:
-            self.weights = weights.copy()
 
         if len(self.weights) != len(self.bdd_node.bdd.vars):
             sys.exit(
@@ -277,16 +286,20 @@ class SampleBDD:
             print("Compute Probs")
 
         start = time.monotonic_ns()
-        self.compute_cached_model_counts(self.bdd_node)
-        print("done with cached counts")
+        if not useWeights:
+            self.compute_cached_model_counts(self.bdd_node)
+        # print("done with cached counts")
         end = time.monotonic_ns()
         compute_cached_model_time = end - start
-        print(f"Done: compute_cached_model_counts {compute_cached_model_time / 1e09}s")
+        # print(f"Done: compute_cached_model_counts {compute_cached_model_time / 1e09}s")
         start = time.monotonic_ns()
-        self.compute_count_probs(self.bdd_node)
+        if useWeights:
+            self.compute_weight_probs(self.bdd_node)
+        else:
+            self.compute_count_probs(self.bdd_node)
         end = time.monotonic_ns()
         compute_true_probs_time = end - start
-        print(f"Done: compute_probs {compute_true_probs_time / 1e09}s")
+        # print(f"Done: compute_probs {compute_true_probs_time / 1e09}s")
 
         # print("Sampling")
         start = time.monotonic_ns()
@@ -390,77 +403,88 @@ class SampleBDD:
 
     # ASSUMEs get_assignement is implemented, if I could be bothered I will add it to an interface
     # Not used in the code so commented out for now
-    # def gen_sample_training_set(
-    #     self,
-    #     dirname,
-    #     num_samples=10,
-    #     sample_format=SampleFormat.Bit,
-    # ):
-    #     dir_path = get_subdirectory(dirname)
-    #     assignments = []
-    #     for i in range(num_samples):
-    #         (_, _, sample, _) = self.sample()
-    #         assignment = self.get_assignment(sample)
-    #         assignments.append(assignment)
+    def gen_sample_training_set(
+        self,
+        dirname,
+        num_samples=10,
+        sample_format=SampleFormat.Bit,
+    ):
+        dir_path = get_subdirectory(dirname)
+        assignments = []
+        for i in range(num_samples):
+            (_, _, sample, _) = self.sample()
+            assignment = self.get_assignment(sample)
+            assignments.append(assignment)
 
-    #     # pickling for now
-    #     # format size-num_samples-runID
-    #     pickle_file = open(f"{dir_path}/{num_samples}-{uuid.uuid4()}.pkl", "wb")
-    #     pickle.dump(assignments, pickle_file)
-    #     pickle_file.close()
+        # pickling for now
+        # format size-num_samples-runID
+        file_name = f"{num_samples}-{uuid.uuid4()}.pkl"
+        pickle_file = open(f"{dir_path}/{file_name}", "wb")
+        pickle.dump(assignments, pickle_file)
+        pickle_file.close()
+        return file_name
 
-    # def load_sample_assignments_set(self, assign_pickle_file):
-    #     pickle_file = open(assign_pickle_file, "rb")
-    #     assignments = pickle.load(pickle_file)
-    #     pickle_file.close()
-    #     return assignments
 
-    # def train_with_n_runs(self, path):
-    #     runs = get_all_elements_in_dir(get_subdirectory(path), lambda x: "pkl" in x)
-    #     counts = {}
-    #     big_count = 0
-    #     for run in runs:
-    #         assignments = self.load_assignments_set(f"{path}/{run}")
-    #         run_counts = self.train_with_one_run(assignments, False)
-    #         small_count = len(assignments)
-    #         big_count += small_count
+    def load_sample_assignments_set(self, assign_pickle_file):
+        pickle_file = open(assign_pickle_file, "rb")
+        assignments = pickle.load(pickle_file)
+        pickle_file.close()
+        return assignments
 
-    #         if len(counts) < 1:
-    #             counts = run_counts
-    #         else:
-    #             for el in counts:
-    #                 counts[el] += run_counts[el]
+    def train_with_n_runs(self, path):
+        if not self.weights:
+            self.assign_weights()
+        runs = get_all_elements_in_dir(get_subdirectory(path), lambda x: "pkl" in x)
+        counts = {}
+        big_count = 0
+        for run in runs:
+            assignments = self.load_sample_assignments_set(f"{path}/{run}")
+            run_counts = self.train_with_one_run(assignments, False)
+            small_count = len(assignments)
+            big_count += small_count
+            # print(f"run_counts:{run_counts}")
 
-    #     for bit in counts:
-    #         high = counts[bit] / big_count
-    #         low = 1.0 - high
-    #         self.weights[self.bdd.var_at_level(bit)] = (low, high)
+            if len(counts) < 1:
+                counts = run_counts
+            else:
+                for el in counts:
+                    counts[el] += run_counts[el]
+            # print(f"counts:{counts}")
+            # print(f"big count:{big_count}")
 
-    #         return counts
+        for bit in counts:
+            # print(f"bit:{bit}")
+            high = counts[bit] / big_count
+            low = 1.0 - high
+            # print("adjusting weights ")
+            # print(low,high)
+            self.weights[self.bdd.var_at_level(bit)] = (low, high)
 
-    # def train_with_one_run(self, assignments, update_weights=True):
-    #     counts = {}
-    #     for i in range(len(self.weights)):
-    #         counts[i] = 0
+        return counts
 
-    #     for assignment in assignments:
-    #         # print(type(assignment))
-    #         # print(assignment)
-    #         for i, bit in enumerate(assignment):
-    #             # print("bit", bit)
-    #             # print(i)
-    #             if int(assignment[bit]) == 1:
-    #                 counts[i] = counts[i] + 1
+    def train_with_one_run(self, assignments, update_weights=True):
+        counts = {}
+        for i in range(len(self.weights)):
+            counts[i] = 0
 
-    #     if update_weights:
-    #         for bit in counts:
-    #             high = counts[bit] / len(assignments)
-    #             low = 1.0 - high
-    #             self.weights[self.bdd.var_at_level(bit)] = (low, high)
+        for assignment in assignments:
+            # print(type(assignment))
+            # print(assignment)
+            for i, bit in enumerate(assignment):
+                # print("bit", bit)
+                # print(i)
+                if int(assignment[bit]) == 1:
+                    counts[i] = counts[i] + 1
 
-    #     # print(self.weights)
-    #     # print(counts)
-    #     return counts
+        if update_weights:
+            for bit in counts:
+                high = counts[bit] / len(assignments)
+                low = 1.0 - high
+                self.weights[self.bdd.var_at_level(bit)] = (low, high)
+
+        # print(self.weights)
+        # print(counts)
+        return counts
 
     def sat_omega_model(self, model):
         """Check if a model is SAT with the wrapped BDD

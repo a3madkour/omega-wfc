@@ -189,10 +189,10 @@ class Trial:
                 header_value = self.generator.get_header_value(header)
                 data_str += f",{header_value}"
 
-            data_str += f",{self.time_data["compute_true_probs_time"][i]}" 
+            data_str += f",{self.time_data['compute_true_probs_time'][i]}" 
 
             if "marginal" in self.metrics_data:
-                data_str += f",{self.metrics_data["marginal"][i]}"
+                data_str += f",{self.metrics_data['marginal'][i]}"
 
             if "learning_time" in self.time_data:
                 learning_time_data = self.time_data["learning_time"][i]

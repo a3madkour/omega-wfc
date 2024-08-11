@@ -30,6 +30,7 @@ class Platformer(SampleBDD):
 
         context.bdd.configure(reordering=False)
 
+        #a dict with default value context.false
         solid = defaultdict(lambda: context.false)
         solid.update({k: context.add_expr(v) for k,v in var_names.items()})
 
@@ -38,20 +39,22 @@ class Platformer(SampleBDD):
         for j in range(self.height-1):
             reachable[(0,j)] = context.false
 
+        #the tile atop the beginning tile is reachable
         reachable[(0,self.height-1)] = context.true
         for i in range(1,self.width):
             for j in range(self.height):
                 reachable[(i,j)] = context.false # not reachable by default
 
+                #is the floor below me true?
                 floor_below = solid.get((i,j+1), context.true)
 
-                # horizontal walk
+                # horizontal walk-- I can get to i,j from i-1,j
                 reachable[(i,j)] |= reachable[(i-1,j)] & floor_below & ~solid[(i,j)]
 
-                # horizontal jump across gap
+                # horizontal jump across gap -- I can get to i,j from i-2,j
                 reachable[(i,j)] |= reachable[(i-2,j)] & ~solid[(i-1,j)] & ~solid[(i-1,j-1)] & floor_below & ~solid[(i,j)]
 
-                # step up
+                # step up -- I can jump to i,j from i-1,j+1 (i.e diagonal right (+x(from i-1)) and up (-y(from j+1)) )
                 reachable[(i,j)] |= reachable[(i-1,j+1)] & floor_below & ~solid[(i,j)] & ~solid[(i-1,j)]
 
                 # fall down (extended knight's move downward)
@@ -63,7 +66,7 @@ class Platformer(SampleBDD):
 
         playable = reachable[(self.width-1,0)]
 
-        spec = playable & ~solid[(0,self.height-1)] & solid[(0,0)]
+        spec = playable & ~solid[(0,self.height-1)]  
 
         self.bdd_node = spec
         self.bdd = spec.bdd
@@ -128,8 +131,8 @@ def draw_analytical_era_reachable_platformer(generator, prob=False):
     for i in range(generator.width):
         solid_counts = []
         for j in range(generator.height):
-            reach_bdd_node = generator.reachable[(i, j)]
-            actual_node_to_count = reach_bdd_node & generator.bdd_node
+            reach_bdd_spec= generator.reachable[(i, j)]
+            actual_node_to_count = reach_bdd_spec & generator.bdd_node
             count = actual_node_to_count.count()
 
             if prob:
@@ -140,7 +143,7 @@ def draw_analytical_era_reachable_platformer(generator, prob=False):
                     print(
                         f"count,bdd_count: {generator.reachable[(i,j)].count()},{generator.bdd_node.count()}"
                     )
-            print(count)
+            print(f"(i,j): ({i},{j}), count:{count}")
             solid_counts.append(count)
             # solid_counts.reverse()
         grid_of_counts.append(solid_counts)
